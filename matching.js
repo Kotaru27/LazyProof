@@ -19,7 +19,7 @@ function classify(q,cf,reason){
  let qText=q.text||'';const cfText=cf.text||'';
  // Text is exact only after whitespace/punctuation normalization. XML may append visible instructions to a text field.
  const qt=normalizeText(qText), ct=normalizeText(cfText);
- const validText=qt && (qt===ct || (ct.startsWith(qt)&& /[.!?\n]/.test(qt.slice(-2))));
+ const validText=Boolean(qt && qt===ct); // Never silently accept extra programmed wording after the QRE sentence.
  if(!qt)issues.push({type:'unparsed-text',level:'review',message:'QRE question wording was not extracted.'});
  else if(!ct)issues.push({type:'empty-text',level:cf.missingRequested?'review':'mismatch',message:cf.missingRequested?'This question has no entry for the selected XML language; no other language was used.':'Programmed question text is empty in the selected language.'});
  else if(!validText)issues.push({type:'text',level:'mismatch',message:'Question wording differs.'});

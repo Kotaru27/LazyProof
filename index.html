@@ -32,18 +32,17 @@
  </div>
  <div class="setup-actions">
   <div class="detected-locale" id="language-block" hidden>
-   <div class="locale-summary"><div><span class="locale-kicker">Survey language</span><strong id="language-readout">Detecting from XML…</strong></div><button type="button" id="language-change" class="locale-change" hidden aria-expanded="false" aria-controls="language-picker">Change</button></div>
-   <div id="language-picker" class="locale-picker" hidden><label for="language">Choose a language defined in this XML</label><select id="language" aria-label="Survey language from uploaded XML"></select></div>
-   <p class="locale-help" id="language-hint">Detected from uploaded XML. Compare with a QRE in this language.</p>
+   <label for="language" class="locale-kicker">Survey language <span class="required-label">Required</span></label>
+   <select id="language" aria-label="Select XML survey language" required><option value="">Select language…</option></select>
   </div>
-  <button class="primary-btn" id="analyze" disabled>Analyze study <span aria-hidden="true">↗</span></button>
+  <button class="primary-btn" id="analyze" disabled>Compare files <span aria-hidden="true">↗</span></button>
  </div>
  <div id="error" class="error-box" role="alert" hidden></div>
  <div class="set-foot"><span>Local processing · No upload to a server</span><span>Question text · Answer options · Mapping evidence</span></div>
 </section>
 <section id="results" class="results" hidden>
  <div class="results-top"><div><div class="eyebrow"><span class="eyebrow-line"></span>COMPARISON REPORT</div><h2>Review differences<span class="soft-period">.</span></h2><p id="project-name" class="results-subtitle"></p></div><div class="result-actions"><button class="outline-btn" id="change-files">Change files</button><button class="outline-btn" id="export-csv">Export CSV <span aria-hidden="true">↗</span></button></div></div>
- <div class="coverage-note" id="coverage-note"></div>
+ <p class="coverage-note" id="coverage-note"></p>
  <div class="stats" aria-label="Analysis summary">
   <div class="stat-quiet"><span class="stat-number" id="stat-qre">—</span><span class="stat-title">QRE questions scanned</span></div>
   <div><span class="stat-number red" id="stat-mismatch">—</span><span class="stat-title">Possible discrepancies</span></div>
@@ -53,14 +52,14 @@
  <div class="workarea">
   <div class="listpane">
    <div class="section-cap"><span>Findings</span><span id="visible-count"></span></div>
-   <div class="filters"><div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="Search QID, title, text"></div><select id="status-filter" aria-label="Filter by result"><option value="all">All findings</option><option value="mismatch">Discrepancies</option><option value="review">Needs review</option><option value="unmapped">Unmapped</option></select></div>
+   <div class="filters"><div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="Find question or text"></div><select id="status-filter" aria-label="Filter by result"><option value="mismatch" selected>Differences</option><option value="review">Needs review</option><option value="unmapped">Unmapped</option><option value="all">All findings</option></select></div>
    <div class="question-list" id="question-list" aria-label="Question comparison results"></div>
    <button id="load-more" class="load-more" hidden>Show more questions ↓</button>
   </div>
   <div class="detailpane"><div id="detail" class="detail-empty"><div class="empty-glyph">↗</div><h3>Inspect a question</h3><p>Select a finding to compare the complete QRE and CF wording.</p></div></div>
  </div>
  
- <div class="result-footer">Source comparison only. This report cannot prove respondent rendering, scripting logic, routing correctness, or visual formatting.</div>
+ <div class="result-footer">Source-text comparison only. Unverified routing, dynamic text and incomplete translations remain under “Needs review.”</div>
 </section>
 </main>
 <footer><span>LAZYPROOF / SURVEY QA</span><span>Private by design <span class="footer-bullet">·</span> No AI <span class="footer-bullet">·</span> Static, offline-capable</span></footer>

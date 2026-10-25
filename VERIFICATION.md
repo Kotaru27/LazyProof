@@ -1,19 +1,12 @@
-# LazyProof v0.4 verification (2026-10-25)
+# LazyProof v0.5 verification
 
-Scope: only XML-derived language options and selection UI. Parsing, matching, text comparison, and CSV behavior are unchanged except for rejecting unsupported locale requests.
-
-## Source evidence
-
-- Demo XML `p474943337087.zip`: `ProjectInfo/Languages` lists **9** and **7**. `ProjectInfo DefaultLanguage=7`; routed question text in language 9 is more populated than in language 7. Auto detection uses the higher populated count from the **active routing question content**, rather than blindly using a template default.
-- Other language attributes, e.g. 12 and 1043, occur in resource/template content and do not qualify as project languages.
-
-## Executed checks
-
-- `node --check app.js`, `node --check parsers.js`: syntax passed.
-- `python test-v04.py`: Chromium test PASS — no preselected menu before file, German (9) selected by uploaded XML, selectable options exactly [9, 7], 48 QRE questions compared, 40 discrepancy/review CSV rows and selected locale 9, change to 7 preserved; synthetic XML with only 12 auto-selects English (12) and hides Change; resource-only languages hidden; malformed XML blocks Analyze; no uncaught browser errors.
-- `python test-v04-regression.py`: existing full-text word-highlight, CSV, language isolation and strict missing selected-language tests PASS after updating the fixtures to declare their available languages; selected 7 only returns 7 when specified; no page script errors or external network requests recorded.
-
-## Important boundary
-
-- Auto locale determination is a deterministic heuristic when multiple project languages are explicitly listed. A translated study where the default language is 7 but most routed question text is 9 will select 9. Users may switch languages only to those listed in XML. A QRE in another language still requires manual selection or a matching QRE.
-- This does not prove comparison accuracy across all possible XML survey schema variants or live rendering.
+- Scope: original two uploaded demo files `P110843_38_Aldi_Nachwuchskräfte_Confirmit_SP_Instructions_v2_20261021.docx` and `p474943337087.zip`.
+- Environment: cloud Chromium / Playwright, in-memory page assembled from exact static release JS/CSS. Browser navigation to `file://` was blocked by the execution policy; the app was rendered with `set_content` and `add_script_tag`.
+- Input options: placeholder unselected, IDs 7 and 9 from XML; 7 marked project default; Analyze disabled until user selects a language.
+- Language 7 demo: 48 QRE items; 43 mapped; 8 source matches hidden; 13 possible differences; 27 needs review; 0 classified `unmapped` (5 ambiguous items are part of review). 13 differences displayed by default; 40 non-match/review findings exported to CSV.
+- Language 9 demo: 48 QRE items; 43 mapped; 6 source matches hidden; 16 possible differences; 26 needs review. No question titles/text borrowed from another selected language.
+- Regression: full text rendered on both sides, per-word green/red markers; searchable mapping alternatives, manual override/reset; internal variables such as SMSVersion/PID excluded; abbreviation review retains visible reason; changing the XML to a single-language definition resets selection; invalid replacement cannot reuse old file.
+- Correctness probe: additional CF wording following an otherwise exact QRE sentence is now a mismatch rather than accepted as equivalent.
+- Desktop smoke test at 1366x768 and 2560x1440: no horizontal overflow. 2560 wide layout 2360 CSS pixels; 1366 wide layout about 1298 CSS pixels.
+- No JavaScript page errors or external web requests observed during recorded test.
+- Not verified: hosted-page client browser test, accessibility audit, real respondent-rendering equivalence, complete routing/piping/grid correctness, all possible survey exports.

@@ -162,7 +162,6 @@ function collectAnswers(root,language,listMap,depth=0){
 // The official ProjectInfo/Languages list is the authoritative list of project
 // languages. Numerous other Language attributes belong to embedded template and
 // resource translations and MUST NOT become UI choices.
-const LOCALE_NAMES={'9':'German','7':'Default','12':'English','1043':'Dutch','1025':'Arabic'};
 function surveyLanguageInfo(document){
  const root=document.documentElement;
  if(root.localName!=='Project')throw Error('Expected Confirmit Project XML. This does not look like a survey definition.');
@@ -170,28 +169,20 @@ function surveyLanguageInfo(document){
  const routing=direct(direct(questionnaire,'Routing'),'Nodes');
  if(!routing)throw Error('Could not find Questionnaire > Routing > Nodes. Check the export type.');
  const stated=children(direct(proj,'Languages'),'Language').map(txt).filter(x=>/^\d+$/.test(x));
- const weights=new Map();
- // Read question-level translations only. Other XML sections may have hundreds
- // of unused template locale IDs, so never use them to advertise languages.
+ // Survey declarations take precedence over template and embedded asset languages.
+ const found=new Set();
  for(const ft of descendants(routing,'FormText')){
-  const id=ft.getAttribute('Language');
-  if(!id || !/^\d+$/.test(id))continue;
-  const text=txt(direct(ft,'Text')),instruction=txt(direct(ft,'Instruction'));
-  if(text || instruction)weights.set(id,(weights.get(id)||0)+(text?2:1));
+  const id=ft.getAttribute('Language');if(id&&/^\d+$/.test(id))found.add(id);
  }
- const languages=[...new Set(stated.length?stated:[...weights.keys()])];
+ const languages=[...new Set(stated.length?stated:[...found])];
  if(!languages.length)throw Error('No survey languages could be identified from this XML.');
  const projectDefault=proj?.getAttribute('DefaultLanguage')||'';
- // Explicit default languages may be template defaults rather than the most
- // populated survey language. Prefer real question-text coverage, then default.
- const detected=languages.reduce((best,id)=>{
-  const weight=weights.get(id)||0,previous=weights.get(best)||0;
-  if(weight>previous)return id;
-  if(weight===previous && id===projectDefault)return id;
-  return best;
- },languages[0]);
- const ordered=[detected,...languages.filter(x=>x!==detected)];
- return {languages:ordered.map(id=>({id,name:LOCALE_NAMES[id]||`Language ${id}`,label:`${LOCALE_NAMES[id]||'Language'} · ${id}`,questionTextWeight:weights.get(id)||0})),detectedLanguage:detected,projectDefaultLanguage:projectDefault};
+ // The export supplies identifiers, not a trustworthy per-ID language name.
+ // Never infer a language from content volume or assume IDs mean German/English.
+ const ordered=[...languages].sort((a,b)=>{
+  if(a===projectDefault)return -1;if(b===projectDefault)return 1;return Number(a)-Number(b);
+ });
+ return {languages:ordered.map(id=>({id,name:`Language ${id}`,label:`Language ${id}${id===projectDefault?' · Project default':''}`})),projectDefaultLanguage:projectDefault};
 }
 function parseCF(document,requestedLang='auto'){
  const root=document.documentElement;
@@ -200,7 +191,7 @@ function parseCF(document,requestedLang='auto'){
  const routing=direct(direct(questionnaire,'Routing'),'Nodes');
  if(!routing)throw Error('Could not find Questionnaire > Routing > Nodes. Check the export type.');
  const profile=surveyLanguageInfo(document);
- const language=(requestedLang==null||requestedLang==='auto')?profile.detectedLanguage:String(requestedLang);
+ const language=(requestedLang==null||requestedLang==='auto')?profile.projectDefaultLanguage:String(requestedLang);
  // Fail closed rather than silently comparing an XML locale not supported by this survey.
  if(!profile.languages.some(x=>x.id===language))throw Error(`Language ${language} is not listed in this survey definition.`);
  const defaultLanguage=profile.projectDefaultLanguage;
@@ -231,7 +222,7 @@ function parseCF(document,requestedLang='auto'){
   }
  }
  visit(routing);
- return {questions,project:proj?.getAttribute('Name')||'',projectId:proj?.getAttribute('ProjectId')||'',defaultLanguage,selectedLanguage:language,availableLanguages:profile.languages,detectedLanguage:profile.detectedLanguage,types,unresolvedRefs:unresolved,duplicates:[...duplicates.entries()].filter(([k,v])=>v.length>1).map(([k,v])=>k),totalLists:listMap.size};
+ return {questions,project:proj?.getAttribute('Name')||'',projectId:proj?.getAttribute('ProjectId')||'',defaultLanguage,selectedLanguage:language,availableLanguages:profile.languages,types,unresolvedRefs:unresolved,duplicates:[...duplicates.entries()].filter(([k,v])=>v.length>1).map(([k,v])=>k),totalLists:listMap.size};
 }
 let cachedSurvey=null;
 async function loadSurveyDocument(file){

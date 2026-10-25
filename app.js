@@ -2,13 +2,18 @@
 const $=id=>document.getElementById(id);
 let qFile=null,xFile=null,qre=null,cf=null,result=null,manual={},chosen=null,visibleLimit=70,languageReady=false,languageScan=0,languageInfo=null;
 const labels={mismatch:'Difference',review:'Review',unmapped:'Unmapped'};
-function refreshAnalyze(){ $('analyze').disabled=!(qFile&&xFile&&languageReady); }
+function refreshAnalyze(){ $('analyze').disabled=!(qFile&&xFile&&languageReady&&$('language').value); }
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function setInput(type,file){
  if(!file)return;
  const isQ=type==='qre'; const allowed=isQ?/\.docx$/i:/\.(xml|zip)$/i;
- if(!allowed.test(file.name)){showError(`Unsupported ${type.toUpperCase()} format. ${isQ?'Select .docx':'Select .xml or .zip'}.`);return;}
- if(file.size>35*1024*1024){showError('Files must be smaller than 35 MB.');return;}
+ if(!allowed.test(file.name)||file.size>35*1024*1024){
+  // Do not keep a previously accepted file active when the user tries to replace it.
+  if(isQ){qFile=null;}else{xFile=null;languageReady=false;languageInfo=null;languageScan++;$('language-block').hidden=true;}
+  $(type+'-status').textContent='No valid file selected';$(type+'-drop').classList.remove('has-file');
+  refreshAnalyze();
+  showError(!allowed.test(file.name)?`Unsupported ${type.toUpperCase()} format. ${isQ?'Select .docx':'Select .xml or .zip'}.`:'Files must be smaller than 35 MB.');return;
+ }
  if(isQ)qFile=file;else {xFile=file;languageReady=false;languageInfo=null;$('language-block').hidden=true;} 
  $(type+'-status').textContent=file.name;
  $(type+'-size').textContent=(file.size/1024/1024).toFixed(2)+' MB';
@@ -24,14 +29,10 @@ async function loadAvailableLanguages(file){
   languageInfo=profile;
   const picker=$('language'),options=profile.languages;
   picker.replaceChildren();
-  for(const locale of options){const option=document.createElement('option');option.value=locale.id;option.textContent=locale.label;picker.appendChild(option);}
-  picker.value=profile.detectedLanguage;
+  picker.add(new Option('Select language…',''));
+  for(const locale of options)picker.add(new Option(locale.label,locale.id));
+  picker.value=''; // User must explicitly decide; never infer from counts or locale IDs.
   $('language-block').hidden=false;
-  $('language-change').hidden=options.length<2;
-  $('language-picker').hidden=true;
-  $('language-change').setAttribute('aria-expanded','false');
-  $('language-hint').textContent=options.length>1?'Detected from this XML. Change only if the QRE uses another listed language.':'Only one language is declared in this XML.';
-  updateLanguageReadout();
   languageReady=true;
   $('xml-status').textContent=file.name;
   refreshAnalyze();
@@ -41,10 +42,7 @@ async function loadAvailableLanguages(file){
   $('xml-status').textContent='Could not read survey XML';showError(e.message||String(e));
  }
 }
-function updateLanguageReadout(){
- const current=languageInfo?.languages.find(l=>l.id===$('language').value);
- $('language-readout').textContent=current?`${current.name} (${current.id})${current.id===languageInfo.detectedLanguage?' · auto-detected':''}`:'No XML language detected';
-}
+
 function setupDrop(type){
  const d=$(type+'-drop');const input=$(type+'-file');
  input.addEventListener('change',e=>setInput(type,e.target.files?.[0]));
@@ -61,24 +59,24 @@ async function run(){
   qre=await P.parseQRE(qFile);cf=await P.parseSurvey(xFile,$('language').value);
   if(!qre.questions.length)throw Error('No recognizable QIDs were extracted from this Word QRE. Review document layout before using results.');
   if(!cf.questions.length)throw Error('No questions were found in the Confirmit routing tree.');
-  manual={};result=P.compare(qre,cf,manual);chosen=null;visibleLimit=70;
+  manual={};result=P.compare(qre,cf,manual);chosen=null;visibleLimit=70;$('status-filter').value='mismatch';$('search').value='';
   $('setup').hidden=true;$('results').hidden=false;renderResults();window.scrollTo({top:0,behavior:'instant'});
  }catch(e){showError(e.message||String(e));console.error(e);}
- finally{refreshAnalyze();btn.innerHTML='Analyze study <span aria-hidden="true">↗</span>';}
+ finally{refreshAnalyze();btn.innerHTML='Compare files <span aria-hidden="true">↗</span>';}
 }
 function rerun(){const key=chosen;result=P.compare(qre,cf,manual);renderResults(key);}
 function renderResults(selected=chosen){
  const s=result.summary;
  $('project-name').textContent=(cf.project||cf.projectId||'Confirmit survey')+' · '+(cf.availableLanguages.find(l=>l.id===cf.selectedLanguage)?.name||'Language '+cf.selectedLanguage)+' only';
  $('stat-qre').textContent=s.qre;$('stat-mismatch').textContent=s.mismatches;$('stat-review').textContent=s.review;$('stat-unmapped').textContent=s.unmapped;
- $('coverage-note').textContent=`${s.mapped} of ${s.qre} questions mapped · Only XML language ${cf.selectedLanguage} compared · ${s.matches} exact matches hidden`; 
+ $('coverage-note').textContent=`${s.mapped}/${s.qre} mapped · XML language ${cf.selectedLanguage} · ${s.matches} matches hidden`; 
  chosen=selected;refreshVisible();
 }
 function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||r.verdict===filter)&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,r.cf?.text].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
 function refreshVisible(){const rows=filteredRows();if(!rows.some(r=>r.key===chosen))chosen=rows[0]?.key||null;renderList();renderDetail();}
 function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(types.includes('text'))return 'Question wording changed';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
 function renderList(){
- const rows=filteredRows();$('visible-count').textContent=`${rows.length} findings`;
+ const rows=filteredRows();$('visible-count').textContent=`${rows.length} items`;
  const holder=$('question-list');holder.replaceChildren();
  for(const r of rows.slice(0,visibleLimit)){
   const b=document.createElement('button');b.type='button';b.className='question-row'+(r.key===chosen?' selected':'');
@@ -86,7 +84,7 @@ function renderList(){
   b.innerHTML=`<div class="question-titleline"><strong>${escape(r.q.qid)}</strong><span class="status ${r.verdict}">${labels[r.verdict]}</span></div><div class="question-short">${escape(shortFinding(r))}</div><div class="question-meta">${escape(r.q.title||'Question')} <span>· ${escape(r.cf?.qid||'Not mapped')}</span></div>`;
   b.addEventListener('click',()=>{chosen=r.key;refreshVisible();});holder.append(b);
  }
- if(!rows.length){const p=document.createElement('div');p.className='notfound';p.textContent='No questions meet these filters.';holder.append(p);}
+ if(!rows.length){const p=document.createElement('div');p.className='notfound';p.textContent=$('status-filter').value==='mismatch'?'No wording or answer differences found in this view. Check “Needs review” for unresolved comparisons.':'No findings for this filter.';holder.append(p);}
  $('load-more').hidden=rows.length<=visibleLimit;
 }
 function fullDiffHtml(parts){
@@ -107,26 +105,59 @@ function answerDiffSection(r){
  if(issue.extra?.length)html+=`<div><div class="answer-change-label">In CF · Not matched in QRE</div>${issue.extra.map(x=>`<div class="answer-chip"><mark class="diff-changed">${escape(x)}</mark></div>`).join('')}</div>`;
  return html+'</div></section>';
 }
+function manualCandidates(q,query=''){
+ const term=query.trim().toLocaleLowerCase();
+ const title=P.titleKey(q.title),qid=P.canonicalId(q.qid);
+ const norm=s=>String(s||'').toLocaleLowerCase();
+ const tokenSet=new Set(norm(q.text).match(/[\p{L}\p{N}]{4,}/gu)||[]);
+ return cf.questions.filter(c=>c.qid&&c.entityId&&(c.text||c.title||c.instruction)&&!c.hidden).map(c=>{
+  if(term&&!`${c.qid} ${c.title}`.toLocaleLowerCase().includes(term))return null;
+  let points=0;
+  if(norm(c.qid)===norm(q.qid))points+=100;
+  if(P.canonicalId(c.qid)===qid)points+=70;
+  if(title&&P.titleKey(c.title)===title)points+=60;
+  const words=norm(c.text).match(/[\p{L}\p{N}]{4,}/gu)||[];
+  points+=Math.min(32,words.filter(w=>tokenSet.has(w)).length*4);
+  return {c,points};
+ }).filter(Boolean).filter(x=>term||x.points>=16).sort((a,b)=>b.points-a.points||a.c.qid.localeCompare(b.c.qid)).slice(0,8).map(x=>x.c);
+}
+function renderManualCandidates(r,term=''){
+ const holder=$('mapping-candidates');if(!holder)return;holder.replaceChildren();
+ const existing=r.cf;
+ const cs=manualCandidates(r.q,term);
+ if(!cs.length){const empty=document.createElement('p');empty.className='map-empty';empty.textContent='No relevant questions. Try a QID or title.';holder.append(empty);}
+ for(const candidate of cs){
+  const btn=document.createElement('button');btn.type='button';btn.className='candidate'+(candidate.entityId===(manual[r.key]||existing?.entityId)?' candidate-current':'');
+  const head=document.createElement('strong');head.textContent=candidate.qid;
+  const description=document.createElement('span');description.textContent=candidate.title||candidate.text.slice(0,110)||'Untitled question';
+  btn.append(head,description);btn.addEventListener('click',()=>{manual[r.key]=candidate.entityId;rerun();});holder.append(btn);
+ }
+}
 function renderDetail(){
  const r=result.rows.find(x=>x.key===chosen);const host=$('detail');host.className='';
- if(!r){host.innerHTML='<div class="detail-empty"><h3>No question selected</h3></div>';return;}
+ if(!r){host.innerHTML='<div class="detail-empty"><h3>No finding selected</h3><p>Choose a different filter to review other items.</p></div>';return;}
  const c=r.cf,q=r.q;
- const textIssue=r.issues.some(x=>x.type==='text'||x.type==='empty-text');
- let html=`<div class="detail-head"><div><div class="detail-kicker">DISCREPANCY REVIEW</div><h3>${escape(q.qid)}</h3><div class="detail-subtitle">${escape(q.title||'Untitled QRE question')}</div></div><span class="status large ${r.verdict}">${labels[r.verdict]}</span></div>`;
- html+=`<div class="map-info"><span class="meta-pill">Mapping: ${escape(r.reason.replace(/-/g,' '))}</span><span class="meta-pill">CF: ${escape(c?.qid||'Not mapped')}</span></div>`;
+ const issues=r.issues.filter(x=>x.level!=='info');
+ const textIssue=issues.some(x=>x.type==='text'||x.type==='empty-text');
+ let html=`<div class="detail-head"><div><h3>${escape(q.qid)}</h3><div class="detail-subtitle">${escape(q.title||'Question')} ${c?`· CF ${escape(c.qid)}`:''}</div></div><span class="status large ${r.verdict}">${labels[r.verdict]}</span></div>`;
  if(textIssue&&c&&!c.missingRequested)html+=textDiffSection(q,c);
  html+=answerDiffSection(r);
- const explanations=r.issues.filter(i=>i.level!=='info');
- if(explanations.length){
-  html+='<details class="findings-expand"><summary>Review details <span>'+explanations.length+' notes</span></summary><div class="findings-body">';
-  for(const issue of explanations){html+=`<div class="notice ${escape(issue.level)}"><b>${escape(issue.type.replaceAll('-',' '))}</b>${escape(issue.message)}</div>`;}
+ // A review without text deltas must explain the actual limitation upfront.
+ if(!textIssue&&!issues.some(i=>i.type==='answers'&&(i.missing?.length||i.extra?.length))){
+  const primary=issues.find(x=>x.level==='review')||issues[0];
+  if(primary)html+=`<p class="inline-finding"><strong>${escape(shortFinding(r))}</strong><span>${escape(primary.message)}</span></p>`;
+ }
+ const remaining=issues.filter(i=>!(i.type==='text'||i.type==='answers'||i.type==='empty-text'));
+ if(remaining.length>1||(remaining.length===1&&(textIssue||issues.some(x=>x.type==='answers')))){
+  html+=`<details class="findings-expand"><summary>Other verification notes <span>${remaining.length}</span></summary><div class="findings-body">`;
+  for(const issue of remaining)html+=`<div class="notice ${escape(issue.level)}">${escape(issue.message)}</div>`;
   html+='</div></details>';
  }
- html+='<details class="map-expand"><summary>Change question mapping</summary><div class="map-editor"><label for="manual-select">Corresponding CF question</label><select id="manual-select"><option value="">Automatic mapping / unresolved</option>';
- for(const candidate of cf.questions.filter(x=>x.qid)){html+=`<option value="${escape(candidate.entityId)}" ${manual[r.key]===candidate.entityId?'selected':''}>${escape(candidate.qid+' — '+candidate.title)}</option>`;}
- html+='</select><p class="map-help">Changes apply to this report only.</p></div></details>'; 
+ html+='<details class="map-expand"><summary>Correct question mapping</summary><div class="map-editor"><label for="mapping-search">Find the corresponding CF question</label><input id="mapping-search" type="search" placeholder="Search QID or question title" autocomplete="off"><div id="mapping-candidates" class="mapping-candidates"></div><button class="map-reset" type="button" id="map-reset">Reset to automatic mapping</button></div></details>';
  host.innerHTML=html;
- $('manual-select').addEventListener('change',e=>{if(e.target.value)manual[r.key]=e.target.value;else delete manual[r.key];rerun();});
+ const search=$('mapping-search');search.addEventListener('input',()=>renderManualCandidates(r,search.value));
+ $('map-reset').addEventListener('click',()=>{delete manual[r.key];rerun();});
+ host.querySelector('.map-expand').addEventListener('toggle',e=>{if(e.target.open)renderManualCandidates(r,search.value);});
 }
 function csvCell(v){let s=String(v??'').replace(/\r?\n/g,' ');if(/^[\s]*[=+@\-\t]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
 function downloadCSV(){if(!result)return;
@@ -140,7 +171,7 @@ function downloadCSV(){if(!result)return;
  const csv='\uFEFF'+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lazyproof-survey-qa-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
-setupDrop('qre');setupDrop('xml');$('language-change').addEventListener('click',()=>{const p=$('language-picker');p.hidden=!p.hidden;$('language-change').setAttribute('aria-expanded',String(!p.hidden));if(!p.hidden)$('language').focus();});$('language').addEventListener('change',updateLanguageReadout);$('analyze').addEventListener('click',run);
+setupDrop('qre');setupDrop('xml');$('language').addEventListener('change',refreshAnalyze);$('analyze').addEventListener('click',run);
 $('change-files').addEventListener('click',()=>{$('results').hidden=true;$('setup').hidden=false;$('error').hidden=true;window.scrollTo(0,0);});
 $('export-csv').addEventListener('click',downloadCSV);
 $('search').addEventListener('input',()=>{visibleLimit=70;refreshVisible();});$('status-filter').addEventListener('change',()=>{visibleLimit=70;refreshVisible();});
