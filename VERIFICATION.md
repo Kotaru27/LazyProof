@@ -1,24 +1,21 @@
-# LazyProof v0.6 verification evidence
+# LazyProof v0.7 verification
 
-The regression checks were executed in a cloud Chromium runtime using a privately supplied Word QRE and corresponding Confirmit survey export. These source documents are **not included** in the published repository or ZIP.
+Executed in the cloud Chromium harness against privately supplied demo DOCX and XML/ZIP files. The private files are not included in the public repository or release ZIP.
 
-## Confirmed from actual demo inputs (XML language 7)
+## Actual demo, selected XML language 7
 
-- 48 recognized QRE questions, 43 mapped, 14 source matches, 6 potential discrepancies, 28 review cases, 0 unmapped.
-- QRE/CF pairs `oqd3`, `cqd4`, `oqBF2_x`, `cq2000`, `cq3100_X`, `cq3200_X` correctly classified as matches after handling XML Instructions, QRE instruction text, list/section boundaries and quota tables.
-- `cqd4` now yields 16 QRE region answer labels; `cq3100_X` 10 options; `cq2000` 12 options; `progRH9` 4 options.
-- Genuine wording differences (including `cq1200_x` and `cq5200_x`) stay flagged; variable-branded `oqoe4_x` and `cqcp7_x` remain for human review.
-- The CSV excludes exact matches, includes complete combined CF respondent wording for mismatches, and retains review cases.
+- 48 parsed QRE entries; 45 mapped; 17 source matches; 6 potential differences; 25 review entries; 0 unmapped.
+- A multiple-choice QRE list written entirely as unnumbered Word paragraphs now provides 10 options and agrees with the 10 XML response definitions.
+- Two other unnumbered multiple-choice lists now provide 9 options each and agree with their XML response definitions.
+- Two QRE wording variants that share a QID are mapped to one dynamic XML CF question via a referenced variable's selected-language answer texts, each remaining marked as `Needs review` for runtime selection.
+- Six previously identified real differences remain detected; no newly introduced definite mismatch appeared in this demo.
 
-## Synthetic regressions
+## Browser and negative tests
 
-- Exact QRE sentence matching XML Text + Instructions is a match.
-- Changed, omitted, or additional XML instructions are a mismatch.
-- Dynamic text placeholder is review-only.
-- Similar-looking answer labels are not split into false question headings.
-- User chooses language explicitly; English/German label guesses are not made from IDs. Language 9 uses only language-9 XML entries.
-- Browser test had no JavaScript page errors or outgoing web requests.
+- `test_v07_regression.py`: existing browser workflow, two selected languages, CSV export, QRE/XML instruction handling, word differences and no runtime errors/network requests — passed.
+- `test_v07_targets.py`: unnumbered lists, variant 1/2 review labels, exact dynamic-source associations, false-duplicate avoidance, wrong variant rejection, ordinary duplicate-QID safeguards, basic generic unnumbered list fixture and no runtime errors/network requests — passed.
+- `node --check` passed for modified JavaScript files.
 
-## Verification limitations
+## Important boundaries
 
-The Chromium harness injected the exact release HTML/CSS/JS into a browser page because the test environment restricts direct file/host navigation. The public GitHub Pages deployment must be checked separately. No claim of comprehensive QA accuracy or all possible survey logic paths is made.
+The test harness injects release HTML/CSS/JS into a cloud Chromium page because direct public-site browsing is restricted. Source comparison does **not** certify runtime piping, script execution, visual rendering or all Word document layouts. Automated checks can still miss discrepancies. GitHub Actions deployment evidence is tracked separately from browser behavior.

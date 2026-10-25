@@ -1,4 +1,4 @@
-# LazyProof — Survey text QA (v0.6)
+# LazyProof — Survey text QA (v0.7)
 
 A privacy-oriented, static browser tool for comparing a Word QRE (`.docx`) against a Confirmit survey definition (`.xml` or `.zip`). No server, paid API, or AI inference is required. Files are processed locally in your browser.
 
@@ -14,7 +14,7 @@ A privacy-oriented, static browser tool for comparing a Word QRE (`.docx`) again
 
 ## Important limitations
 
-The result is a **source-text comparison**, not proof that the rendered interview is correct. Language ID labels are deliberately neutral when the XML does not supply a reliable language name. Logic, piping, conditions, grid rows, Word revisions, source versions and image-only options can require manual investigation. The Word parser distinguishes programming notes and section headings from respondent copy, but document-specific structures can still require review. Only recognized QRE question IDs are counted, so coverage is not a guarantee that every QRE element has been extracted. Review findings must not be counted as verified matches.
+The result is a **source-text comparison**, not proof that the rendered interview is correct. Language ID labels are deliberately neutral when the XML does not supply a reliable language name. Logic, routing, dynamic piping, conditions, grid rows, Word revisions, source versions and image-only options can require manual investigation. Repeated QIDs representing alternative piped wording are recognized only when each variant can be traced to a selected-language XML source variable; runtime selection remains unverified. The Word parser distinguishes programming notes and section headings from respondent copy, but document-specific structures can still require review. Only recognized QRE question IDs are counted, so coverage is not a guarantee that every QRE element has been extracted. Review findings must not be counted as verified matches.
 
 ## Deployment
 

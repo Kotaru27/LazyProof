@@ -7,8 +7,23 @@ function exact(a,b){return normalizeText(a)===normalizeText(b);}
 // Both belong to the respondent-facing copy, but are retained as distinct source fields.
 function respondentText(cf){return [cf?.text,cf?.instruction].filter(s=>String(s||'').trim()).join('\n').trim();}
 function hasDynamic(s){return /\^[^\^\n]+\^/.test(String(s||''));}
+// Resolve only a simple f('field') placeholder to selected-language source
+// question definitions. NEVER evaluate Confirmit expressions or scripts.
+function dynamicReferences(s){
+ return [...String(s||'').matchAll(/\^f\(\s*(['"])([A-Za-z][A-Za-z0-9_]*)\1\s*\)\^/g)].map(m=>m[2]);
+}
+function knownVariantSource(q,cf,survey){
+ const referenced=dynamicReferences(respondentText(cf));
+ for(const ref of referenced){
+  const sources=survey.questions.filter(x=>x.qid.toLocaleLowerCase()===ref.toLocaleLowerCase());
+  if(sources.length!==1)continue;
+  const options=sources[0].options.filter(o=>o.text&&!o.missingRequested);
+  if(options.some(o=>exact(q.text,o.text)))return sources[0].qid;
+ }
+ return null;
+}
 function codeClean(s){return String(s||'').toLowerCase().replace(/^([coh])q/,'q').replace(/_x$/,'').replace(/_y$/,'');}
-function cleanOption(s){return P.normalize(String(s||'').replace(/:\s*open\s+end\s*(?:\(anchor\))?\s*$/i,':').replace(/^\s*\d{1,4}\.\s*/,'').replace(/\s*\[(?:screenout|screen-out|anchor|exlusive(?:\. anchor)?|exclusive(?:, anchor)?|ko|if alone[^\]]*)\]\s*/ig,'').replace(/\s*\(\s*(?:naturall?\s+fallout|exclusive|anchor|exlusive)(?:[,. ]+(?:anchor|exclusive))?\s*\)\s*$/ig,'')).replace(/\s+/g,' ').trim();}
+function cleanOption(s){if(/^\[\s*open answer\s*\]$/i.test(String(s||'').trim()))return P.normalize(s);return P.normalize(String(s||'').replace(/:\s*open\s+end\s*(?:\(anchor\))?\s*$/i,':').replace(/^\s*\d{1,4}\.\s*/,'').replace(/\s*\[(?:screenout|screen-out|anchor|exlusive(?:\. anchor)?|exclusive(?:, anchor)?|ko|if alone[^\]]*|open answer|open text)\]\s*/ig,'').replace(/\s*\(\s*(?:naturall?\s+fallout|exclusive|anchor|exlusive)(?:[,. ]+(?:anchor|exclusive))?\s*\)\s*$/ig,'')).replace(/\s+/g,' ').trim();}
 function titleKey(s){return P.normalize(s).replace(/\[[^\]]+\]/g,'').replace(/\b(?:randomise|randomize|randomized|answers|sa|ma|oe|text|grid|single choice|multiple choice)\b/gi,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();}
 function bagDifference(qreOptions,xmlOptions){
  const left=qreOptions.map(x=>cleanOption(x)).filter(Boolean);
@@ -70,7 +85,18 @@ function compare(qre,cf,manual={}){
   let candidates=[],reason='',match=null;
   if(manual[key]){candidates=cf.questions.filter(x=>x.entityId===manual[key]);reason='manual';}
   else {
-   if(countQ.get(q.qid.toLowerCase())>1){out.push({q,cf:null,verdict:'review',reason:'duplicate-qre',issues:[{level:'review',type:'duplicate',message:'QID occurs more than once in the QRE; resolve mapping manually.'}],candidates:[],key});continue;}
+   if(countQ.get(q.qid.toLowerCase())>1){
+    // Repeated QIDs can represent legitimate questionnaire alternatives for
+    // a single dynamic Confirmit question (e.g. seen vs heard ad wording).
+    // Permit that mapping ONLY if each QRE variant appears as selected-language
+    // answer text in the same referenced source variable.
+    const variants=qre.questions.filter(x=>x.qid.toLocaleLowerCase()===q.qid.toLocaleLowerCase());
+    const idCandidates=ids.get(q.qid.toLowerCase())||canonical.get(P.canonicalId(q.qid))||[];
+    const eligible=idCandidates.length===1 &&
+      variants.every(v=>knownVariantSource(v,idCandidates[0],cf)) &&
+      variants.every(v=>exact(JSON.stringify(v.options),JSON.stringify(q.options)));
+    if(!eligible){out.push({q,cf:null,verdict:'review',reason:'duplicate-qre',issues:[{level:'review',type:'duplicate',message:'QID occurs more than once in the QRE. No single dynamic-source mapping was confirmed; review the variants.'}],candidates:[],key});continue;}
+   }
    candidates=ids.get(q.qid.toLowerCase())||[];reason='qid';
    if(!candidates.length){candidates=canonical.get(P.canonicalId(q.qid))||[];reason='canonical-qid';}
    if(!candidates.length){const stem=codeClean(q.qid);candidates=cf.questions.filter(x=>x.type==='Grid' && stem.startsWith(codeClean(x.qid)+'_'));if(candidates.length)reason='grid-parent';}
@@ -81,11 +107,26 @@ function compare(qre,cf,manual={}){
   if(!candidates.length){out.push({q,cf:null,verdict:'unmapped',reason:'none',issues:[{level:'review',type:'missing-map',message:'No unique QID, node-label or title mapping was found. This is not proof that the question is absent.'}],candidates:[],key});continue;}
   match=candidates[0];if(match.type==='Grid' && codeClean(q.qid).startsWith(codeClean(match.qid)+'_'))reason='grid-parent';used.add(match.entityId);
   const r=classify(q,match,reason);
+  const source=knownVariantSource(q,match,cf);
+  const duplicateVariants=countQ.get(q.qid.toLowerCase())>1;
+  if(duplicateVariants && source){
+   // Don't present a false wording mismatch: the QRE variant is present in
+   // the referenced XML source. Keep a review because runtime selection and
+   // routing cannot be proved from the definition alone.
+   r.issues=r.issues.filter(i=>!['dynamic-text','piping'].includes(i.type));
+   r.issues.push({type:'dynamic-source',level:'review',source,message:`This QRE wording is present in XML variable ${source} for the selected language. Runtime selection still needs verification.`});
+   r.verdict=r.issues.some(i=>i.level==='mismatch')?'mismatch':'review';
+  }
   out.push({...r,q,cf:match,reason,candidates:[],key});
  }
  const mappedByEntity=new Map();
  for(const row of out){if(!row.cf||row.cf.type==='Grid')continue;const prior=mappedByEntity.get(row.cf.entityId)||[];prior.push(row);mappedByEntity.set(row.cf.entityId,prior);}
- for(const group of mappedByEntity.values())if(group.length>1)for(const row of group){row.issues.push({type:'duplicate-mapping',level:'review',message:'This CF node is mapped to multiple QRE questions. Confirm the correct pairing.'});if(row.verdict==='match')row.verdict='review';}
+ for(const group of mappedByEntity.values())if(group.length>1){
+  const alternatives=group.every(row=>row.issues.some(i=>i.type==='dynamic-source')) &&
+    group.every(row=>row.q.qid.toLocaleLowerCase()===group[0].q.qid.toLocaleLowerCase());
+  if(alternatives){group.forEach((row,index)=>{row.variantNumber=index+1;row.variantTotal=group.length;});continue;}
+  for(const row of group){row.issues.push({type:'duplicate-mapping',level:'review',message:'This CF node is mapped to multiple QRE questions. Confirm the correct pairing.'});if(row.verdict==='match')row.verdict='review';}
+ }
  const sourceExtra=cf.questions.filter(x=>!used.has(x.entityId)&&!x.hidden);
  const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,extras:sourceExtra.length};
  return {rows:out,sourceExtra,summary,created:new Date().toISOString()};

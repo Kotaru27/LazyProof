@@ -109,6 +109,26 @@ function splitQre(blocks){
    if(b.isOption && s.length<=190 && !/^\d+\.\s*(?:Introduction|Demographic|Creative)/i.test(s)) options.push(cleanQreText(s));
    else notes.push(cleanQreText(s));
   }
+  // Some Word QREs format response choices as ordinary unnumbered paragraphs.
+  // Recover them only when an explicit SA/MA heading and a respondent-facing
+  // selection instruction precede a clear run of 3+ short candidate options.
+  // Do not use the CF option list as an oracle: unmatched QRE options must remain.
+  if(!options.length && /\[\s*(?:SA|MA|Single|Multi)(?:\b|\s|[-\]])/i.test(current.title||'')){
+   const lastLead=lines.findLastIndex(b=>!b.isOption && isRespondentLead(b.text));
+   if(lastLead>=0){
+    const before=lines[lastLead].text;
+    const isSelectionInstruction=/\b(?:wählen|kreuzen|markieren|auswählen|select|choose|tick|mark)\b/i.test(before);
+    const suffix=lines.slice(lastLead+1).filter(b=>!/^Answers:?$/i.test(b.text));
+    const plausible=x=>!x.isOption && x.text.length<=190 && !META_RE.test(x.text) &&
+      !isQuestionTitle(x.text) && !isRespondentLead(x.text) &&
+      !/^\[.*\]$/.test(x.text) && !/^\d+\.\s*[A-Za-z]/.test(x.text);
+    if(isSelectionInstruction && suffix.length>=3 && suffix.every(plausible)){
+     for(const b of suffix)options.push(cleanQreText(b.text));
+     // Remove recovered option entries from the free-text notes.
+     notes.splice(Math.max(0, notes.length-suffix.length),suffix.length);
+    }
+   }
+  }
   current.partialOptions=options.some(x=>/^(?:\.{2,}|…)$/.test(x));
   current.options=[...new Set(options.filter(x=>x&&!/^(?:\.{2,}|…)$/.test(x)))];
   current.additional=notes.filter(Boolean);

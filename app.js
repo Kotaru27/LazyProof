@@ -74,14 +74,14 @@ function renderResults(selected=chosen){
 }
 function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||r.verdict===filter)&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,P.respondentText(r.cf)].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
 function refreshVisible(){const rows=filteredRows();if(!rows.some(r=>r.key===chosen))chosen=rows[0]?.key||null;renderList();renderDetail();}
-function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(types.includes('text'))return 'Question wording changed';if(types.includes('dynamic-text'))return 'Variable wording needs review';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
+function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(types.includes('text'))return 'Question wording changed';if(types.includes('dynamic-source'))return `Variable text · QRE variant ${r.variantNumber||1}/${r.variantTotal||1}`;if(types.includes('dynamic-text'))return 'Variable wording needs review';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
 function renderList(){
  const rows=filteredRows();$('visible-count').textContent=`${rows.length} items`;
  const holder=$('question-list');holder.replaceChildren();
  for(const r of rows.slice(0,visibleLimit)){
   const b=document.createElement('button');b.type='button';b.className='question-row'+(r.key===chosen?' selected':'');
   b.setAttribute('aria-selected',String(r.key===chosen));
-  b.innerHTML=`<div class="question-titleline"><strong>${escape(r.q.qid)}</strong><span class="status ${r.verdict}">${labels[r.verdict]}</span></div><div class="question-short">${escape(shortFinding(r))}</div><div class="question-meta">${escape(r.q.title||'Question')} <span>· ${escape(r.cf?.qid||'Not mapped')}</span></div>`;
+  b.innerHTML=`<div class="question-titleline"><strong>${escape(r.q.qid)}${r.variantTotal?' · '+r.variantNumber+'/'+r.variantTotal:''}</strong><span class="status ${r.verdict}">${labels[r.verdict]}</span></div><div class="question-short">${escape(shortFinding(r))}</div><div class="question-meta">${escape(r.q.title||'Question')} <span>· ${escape(r.cf?.qid||'Not mapped')}</span></div>`;
   b.addEventListener('click',()=>{chosen=r.key;refreshVisible();});holder.append(b);
  }
  if(!rows.length){const p=document.createElement('div');p.className='notfound';p.textContent=$('status-filter').value==='mismatch'?'No wording or answer differences found in this view. Check “Needs review” for unresolved comparisons.':'No findings for this filter.';holder.append(p);}
@@ -139,7 +139,7 @@ function renderDetail(){
  const c=r.cf,q=r.q;
  const issues=r.issues.filter(x=>x.level!=='info');
  const textIssue=issues.some(x=>x.type==='text'||x.type==='empty-text'||x.type==='dynamic-text');
- let html=`<div class="detail-head"><div><h3>${escape(q.qid)}</h3><div class="detail-subtitle">${escape(q.title||'Question')} ${c?`· CF ${escape(c.qid)}`:''}</div></div><span class="status large ${r.verdict}">${labels[r.verdict]}</span></div>`;
+ let html=`<div class="detail-head"><div><h3>${escape(q.qid)}${r.variantTotal?' · variant '+r.variantNumber+'/'+r.variantTotal:''}</h3><div class="detail-subtitle">${escape(q.title||'Question')} ${c?`· CF ${escape(c.qid)}`:''}</div></div><span class="status large ${r.verdict}">${labels[r.verdict]}</span></div>`;
  if(textIssue&&c&&!c.missingRequested)html+=textDiffSection(q,c);
  html+=answerDiffSection(r);
  // A review without text deltas must explain the actual limitation upfront.
