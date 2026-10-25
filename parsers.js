@@ -126,8 +126,8 @@ function splitQre(blocks){
   // Do not use the CF option list as an oracle: unmatched QRE options must remain.
   if(!options.length && /\[\s*(?:SA|MA|Single|Multi)(?:\b|\s|[-\]])/i.test(current.title||'')){
    const lastLead=lines.findLastIndex(b=>!b.isOption && isRespondentLead(b.text));
-   if(lastLead>=0){
-    const before=lines[lastLead].text;
+   if(lastLead>=0||isRespondentLead(current.stem)){
+    const before=lastLead>=0?lines[lastLead].text:current.stem;
     const isSelectionInstruction=/\b(?:wählen|kreuzen|markieren|auswählen|select|choose|tick|mark)\b/i.test(before);
     const suffix=lines.slice(lastLead+1).filter(b=>!/^Answers:?$/i.test(b.text));
     const plausible=x=>!x.isOption && x.text.length<=190 && !META_RE.test(x.text) &&
@@ -142,6 +142,7 @@ function splitQre(blocks){
   }
   current.partialOptions=options.some(x=>/^(?:\.{2,}|…)$/.test(x));
   current.options=options.filter(x=>x&&!/^(?:\.{2,}|…)$/.test(x));
+  current.numericOptionLines=content.filter(b=>b.numericPrefix).map(b=>b.originalText);
   current.additional=notes.filter(Boolean);
   // Questionnaire stem and respondent instructions can precede answer options.
   // The prior !options.length check dropped instructions for MA/SA questions.
@@ -157,6 +158,9 @@ function splitQre(blocks){
    copy.push(line);
   }
   current.text=cleanQreText(copy.join(' '));
+  // Never silently turn unclassified respondent paragraphs into a clean match.
+  // Keep them separate rather than guessing that every Word note is visible copy.
+  current.unclassifiedLines=notes.filter(line=>line&&!/^Answers:?$/i.test(line)&&!/^\[.*\]$/.test(line)&&!norm(current.text).includes(norm(line)));
   current.ignoredLines=content.length-lines.length;
   delete current.lines;delete current.stem;
   q.push(current);current=null;
@@ -189,7 +193,7 @@ function splitQre(blocks){
   const isOption=b.num || (Boolean(next)&& s.length<200);
   current.struckContent ||= !!(b.hadStruckText||b.fullyStruck);
   if(b.fullyStruck){excluded++;continue;}
-  current.lines.push({...b,text:(next&&isOption?next[1]:s),isOption});
+  current.lines.push({...b,text:(next&&isOption&&!b.num?next[1]:s),originalText:s,numericPrefix:!!(next&&isOption&&!b.num),isOption});
  }
  finish();return {questions:q,discardedNotes:excluded};
 }

@@ -1,7 +1,7 @@
 /* LazyProof · conservative, auditable mapping + comparison. No probabilistic match is ever auto-approved. */
 (function(P){'use strict';
 const esc=(s)=>String(s??'');
-function normalizeText(s){return P.normalize(s).replace(/\s+([.,!?;:])/g,'$1').toLocaleLowerCase();}
+function normalizeText(s){return P.normalize(s).replace(/\s+([.,!?;:])/g,'$1');}
 function exact(a,b){return normalizeText(a)===normalizeText(b);}
 // Confirmit authoring separates visible Question Text from visible Instructions.
 // Both belong to the respondent-facing copy, but are retained as distinct source fields.
@@ -23,11 +23,12 @@ function knownVariantSource(q,cf,survey){
  return null;
 }
 function codeClean(s){return String(s||'').toLowerCase().replace(/^([coh])q/,'q').replace(/_x$/,'').replace(/_y$/,'');}
-function cleanOption(s){if(/^\[\s*open answer\s*\]$/i.test(String(s||'').trim()))return P.normalize(s);return P.normalize(String(s||'').replace(/:\s*open\s+end\s*(?:\(anchor\))?\s*$/i,':').replace(/^\s*\d{1,4}\.\s*/,'').replace(/\s*\[(?:screenout|screen-out|anchor|exlusive(?:\. anchor)?|exclusive(?:, anchor)?|ko|if alone[^\]]*|open answer|open text)\]\s*/ig,'').replace(/\s*\(\s*(?:naturall?\s+fallout|exclusive|anchor|exlusive)(?:[,. ]+(?:anchor|exclusive))?\s*\)\s*$/ig,'')).replace(/\s+/g,' ').trim();}
+function cleanOption(s){if(/^\[\s*open answer\s*\]$/i.test(String(s||'').trim()))return P.normalize(s);return P.normalize(String(s||'').replace(/:\s*open\s+end\s*(?:\(anchor\))?\s*$/i,':').replace(/\s*\[(?:screenout|screen-out|anchor|exlusive(?:\. anchor)?|exclusive(?:, anchor)?|ko|if alone[^\]]*|open answer|open text)\]\s*/ig,'').replace(/\s*\(\s*(?:naturall?\s+fallout|exclusive|anchor|exlusive)(?:[,. ]+(?:anchor|exclusive))?\s*\)\s*$/ig,'')).replace(/\s+/g,' ').trim();}
 function titleKey(s){return P.normalize(s).replace(/\[[^\]]+\]/g,'').replace(/\b(?:randomise|randomize|randomized|answers|sa|ma|oe|text|grid|single choice|multiple choice)\b/gi,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();}
 function bagDifference(qreOptions,xmlOptions){
  const left=qreOptions.map(x=>cleanOption(x)).filter(Boolean);
- const right=xmlOptions.filter(o=>o.text).map(x=>cleanOption(x.text)).filter(Boolean);
+ // CF labels are respondent copy: never remove apparent programming notes or numbers.
+ const right=xmlOptions.filter(o=>o.text).map(x=>P.normalize(x.text)).filter(Boolean);
  const unmatchedRight=right.slice(), missing=[];
  for(const a of left){const idx=unmatchedRight.findIndex(b=>exact(a,b));if(idx<0)missing.push(a);else unmatchedRight.splice(idx,1);}
  return {missing,extra:unmatchedRight,referenceCount:left.length,actualCount:right.length};
@@ -36,6 +37,8 @@ function classify(q,cf,reason){
  const issues=[];
  if(reason==='grid-parent')return {verdict:'review',issues:[{type:'grid-row',level:'review',message:'QRE item maps to a CF grid parent. Row-level wording cannot be automatically established from this question-level pairing.'}],answers:{missing:[],extra:[],referenceCount:q.options.length,actualCount:cf.options.length}};
  let qText=q.text||'';const cfText=respondentText(cf);
+ if(q.unclassifiedLines?.length)issues.push({type:'qre-completeness',level:'review',message:`${q.unclassifiedLines.length} QRE paragraph(s) could not be confidently assigned to wording or answers. Inspect the original extracted lines below; a clean source match cannot be established.`});
+ if(q.numericOptionLines?.length)issues.push({type:'qre-numbering',level:'review',message:'Manually typed numeric answer prefixes were separated as possible answer codes. The original lines are retained below; verify whether those numbers belong to respondent-visible labels.'});
  // Compare complete respondent-facing copy, including the XML's separate Instructions.
  const qt=normalizeText(qText), ct=normalizeText(cfText);
  const dynamicCopy=hasDynamic(cfText)||hasDynamic(qText);
@@ -55,7 +58,7 @@ function classify(q,cf,reason){
    // Grid and loop answers may be flattened differently: classify for review to avoid a false definitive mismatch.
    const grid=cf.type==='Grid';
    const dynamicOptions=cf.options.some(o=>hasDynamic(o.text));
-   const provisional=grid||dynamicOptions||q.partialOptions;
+   const provisional=grid||dynamicOptions||q.partialOptions||q.unclassifiedLines?.length||q.numericOptionLines?.length;
    issues.push({type:'answers',level:provisional?'review':'mismatch',message:provisional?'Answer comparison is inconclusive for grid rows, variable expressions, or abbreviated lists.':'Answer options differ.',missing:ans.missing,extra:q.partialOptions?[]:ans.extra});
   }
  }
@@ -73,10 +76,11 @@ function classify(q,cf,reason){
   const consistent=qk.length>=5&&ck.length>=5&&(qk===ck||(ck.length>=7&&qk.startsWith(ck)));
   if(!consistent){
    issues.push({type:'mapping',level:'review',message:'QID normalization suggested this pairing but question titles do not confirm identity.'});
-   for(const issue of issues)if(issue.level==='mismatch')issue.level='review';
+   for(const issue of issues)if(issue.level==='mismatch'){issue.originalLevel='mismatch';issue.level='review';}
   }
  }
  if(reason==='title')issues.push({type:'mapping',level:'review',message:'Matched by unique title rather than question identifier. Confirm this mapping.'});
+ if(reason==='manual')issues.push({type:'mapping',level:'review',message:'This pairing was selected manually. Confirm the question identity separately after inspecting both sources.'});
  if(reason==='grid-parent')issues.push({type:'mapping',level:'review',message:'QRE question may be a row of a CF grid; validate row-level mapping before approving.'});
  if(esc(q.qid).toLowerCase()!==esc(cf.qid).toLowerCase())issues.push({type:'qid',level:'info',message:`QIDs differ: ${q.qid} → ${cf.qid}.`});
  const verdict=issues.some(x=>x.level==='mismatch')?'mismatch':issues.some(x=>x.level==='review')?'review':'match';
@@ -93,28 +97,28 @@ function assessEvidence(row){
  const dynamic=hasDynamic(q.text)||hasDynamic(respondentText(cf));
  let text='unverified';
  if(types.has('dynamic-source'))text='variable-source-found';
- else if(!cf.missingRequested&&qText&&!dynamic)text=qText===cfText?'same':'different';
+ else if(row.reason!=='grid-parent'&&!cf.missingRequested&&qText&&!dynamic)text=qText===cfText?(q.unclassifiedLines?.length?'unverified':'same'):'different';
  const qOpts=q.options||[],cfOpts=cf.options||[];
  const badLocale=cfOpts.some(o=>o.missingRequested&&!o.text&&!o.image);
  const badRef=cfOpts.some(o=>o.unresolvedRef);
  const optsDynamic=cfOpts.some(o=>hasDynamic(o.text));
  let answers='unverified';
- if(!qOpts.length&&!cfOpts.length && !types.has('answers-unknown'))answers='not-applicable';
- else if(qOpts.length&&cfOpts.length&&!q.partialOptions&&!badLocale&&!badRef&&!optsDynamic&&!cf.missingRequested&&cf.type!=='Grid'&&row.reason!=='grid-parent'){
+ if(!qOpts.length&&!cfOpts.length&&row.reason!=='grid-parent'&&!['Grid','SingleGrid','MultiGrid'].includes(cf.type)&&!q.unclassifiedLines?.length&&!q.numericOptionLines?.length&&!types.has('answers-unknown'))answers='not-applicable';
+ else if(qOpts.length&&cfOpts.length&&!q.partialOptions&&!q.unclassifiedLines?.length&&!q.numericOptionLines?.length&&!badLocale&&!badRef&&!optsDynamic&&!cf.missingRequested&&cf.type!=='Grid'&&row.reason!=='grid-parent'){
   const d=bagDifference(qOpts,cfOpts);
   answers=d.missing.length||d.extra.length?'different':'same';
  }
  const mappedConcern=['mapping','identity-conflict','duplicate-mapping','grid-row','ambiguous','missing-map','duplicate'];
- const mapping=types.has('duplicate-mapping')||mappedConcern.some(t=>types.has(t))||row.reason==='title'||row.reason==='grid-parent'||row.reason==='manual'?'needs-confirmation':'corroborated';
+ const mapping=row.userConfirmed?'user-confirmed':types.has('duplicate-mapping')||mappedConcern.some(t=>types.has(t))||row.reason==='title'||row.reason==='grid-parent'||row.reason==='manual'?'needs-confirmation':'corroborated';
  const hasChange=text==='different'||answers==='different';
  let reviewGroup='Source completeness';
- if(mapping!=='corroborated')reviewGroup='Question mapping';
+ if(!['corroborated','user-confirmed'].includes(mapping))reviewGroup='Question mapping';
  else if(types.has('grid')||types.has('grid-row'))reviewGroup='Grid structure';
  else if(types.has('dynamic-source')||types.has('dynamic-text')||types.has('piping'))reviewGroup='Dynamic content';
  else if(types.has('hidden'))reviewGroup='Routing / visibility';
- return {text,answers,mapping,hasChange,reviewGroup,changeIsProvisional:hasChange&&mapping!=='corroborated'};
+ return {text,answers,mapping,hasChange,reviewGroup,changeIsProvisional:hasChange&&!['corroborated','user-confirmed'].includes(mapping)};
 }
-function compare(qre,cf,manual={}){
+function compare(qre,cf,manual={},confirmations={}){
  const out=[], used=new Set(), ids=new Map(), canonical=new Map(), titles=new Map();
  for(const x of cf.questions){
   if(x.qid){const a=ids.get(x.qid.toLowerCase())||[];a.push(x);ids.set(x.qid.toLowerCase(),a);
@@ -157,14 +161,14 @@ function compare(qre,cf,manual={}){
    // several matching answer labels can overcome a stale Word section title.
    const consistentContent=normalizeText(q.text).length>=30 &&
     exact(q.text,respondentText(match)) && q.options.length>=3 &&
-    !q.partialOptions && !q.struckContent && !match.missingRequested &&
+    !q.partialOptions && !q.struckContent && !q.unclassifiedLines?.length && !q.numericOptionLines?.length && !match.missingRequested &&
     !hasDynamic(respondentText(match)) &&
     match.options.every(o=>!o.missingRequested&&!o.unresolvedRef&&!hasDynamic(o.text)) &&
     (()=>{const a=bagDifference(q.options,match.options);return a.referenceCount>=3 && a.referenceCount===a.actualCount && !a.missing.length && !a.extra.length;})();
    if(consistentContent && countQ.get(q.qid.toLowerCase())===1 && (ids.get(q.qid.toLowerCase())||[]).length===1){
     r.issues.push({type:'title-confirmed-by-content',level:'info',message:'Question titles differ, but unique exact QID, full respondent text, and every answer agree.'});
    }else{
-    r.issues=r.issues.map(i=>i.level==='mismatch'?{...i,level:'review'}:i);
+    r.issues=r.issues.map(i=>i.level==='mismatch'?{...i,originalLevel:'mismatch',level:'review'}:i);
     r.issues.push({type:'identity-conflict',level:'review',message:'QID matches, but QRE and CF titles identify different questions. Verify this mapping before accepting differences.'});
     r.verdict='review';
    }
@@ -193,6 +197,13 @@ function compare(qre,cf,manual={}){
  // downgrade the overall verdict. Neither issue severity nor presentation
  // filters may erase a measured difference between selected-language sources.
  for(const row of out){
+  // User confirmation resolves identity only. Structural, translation and runtime
+  // limitations remain reviews; conflicting shared nodes cannot be approved here.
+  if(row.cf&&row.cf.entityId&&confirmations[row.key]===row.cf.entityId&&!row.issues.some(i=>['duplicate-mapping','grid-row','ambiguous','duplicate'].includes(i.type))){
+   row.userConfirmed=true;
+   row.issues=row.issues.map(i=>['mapping','identity-conflict'].includes(i.type)?{...i,level:'info'}:i.originalLevel?{...i,level:i.originalLevel}:i);
+   row.verdict=row.issues.some(i=>i.level==='mismatch')?'mismatch':row.issues.some(i=>i.level==='review')?'review':'match';
+  }
   row.evidence=assessEvidence(row);
   if(row.evidence.hasChange&&row.verdict==='match'){
    row.verdict='review';
@@ -204,7 +215,7 @@ function compare(qre,cf,manual={}){
  // call them confirmed defects: routing, cells, and QRE coverage may differ.
  const actionableExtras=sourceExtra.filter(x=>x.qid && !x.missingRequested &&
    !['Info'].includes(x.type) && respondentText(x).trim().split(/\s+/).length>=3);
- const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,observedChanges:out.filter(x=>x.evidence.hasChange).length,changesNeedMapping:out.filter(x=>x.evidence.changeIsProvisional).length,reviewOnly:out.filter(x=>x.verdict==='review'&&!x.evidence.hasChange).length,extras:sourceExtra.length,actionableExtras:actionableExtras.length};
+ const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,unpaired:out.filter(x=>!x.cf).length,pairingChecks:out.filter(x=>!x.cf||x.evidence.mapping==='needs-confirmation').length,observedChanges:out.filter(x=>x.evidence.hasChange).length,changesNeedMapping:out.filter(x=>x.evidence.changeIsProvisional).length,reviewOnly:out.filter(x=>x.cf&&x.verdict==='review'&&!x.evidence.hasChange).length,extras:sourceExtra.length,actionableExtras:actionableExtras.length};
  return {rows:out,sourceExtra,actionableExtras,summary,created:new Date().toISOString()};
 }
 P.compare=compare;P.assessEvidence=assessEvidence;P.titleKey=titleKey;P.cleanOption=cleanOption;P.classify=classify;P.respondentText=respondentText;

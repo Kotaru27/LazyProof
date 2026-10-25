@@ -1,19 +1,29 @@
-# LazyProof v0.9 — source evidence and mapping confidence
+# LazyProof v0.10
 
-Compared to v0.8:
+Based on the supplied v0.9 package (SHA-256 `89c1f984dea2f20d1180dcff338e48a75a5735605d253d8236cc0b0716ad9acb`).
 
-- Keeps all verified source wording/answer differences visible, **even if question identity is not yet confirmed**. Such results are labeled as provisional pairing issues instead of being treated as confirmed survey defects.
-- Records independent evidence states for **text**, **answer labels**, and **mapping**, without treating missing translations or dynamic expressions as definite differences.
-- Splits the default results into non-overlapping **Observed changes**, **Other reviews**, and **Unmapped**. Exact source matches remain hidden. Mapping warnings remain accessible for changes.
-- Improves the CSV with evidence and mapping columns. Complete QRE and CF text, including separate CF instructions, remain available for identified text changes.
-- Resolves one reproducible stale-heading review only when a unique exact QID is corroborated by sufficiently distinctive identical question text and three or more identical options. No study-specific QID overrides.
-- Retains the v0.8 Word/XML parsers, browser-side processing, manual language selection, and existing style hierarchy. No new runtime dependency.
+## Review flow
 
-## QA result on the supplied demo, language ID 7
+- Replaced the question-by-question findings list with a pairing overview: explicit QRE QID / CF QID columns and independent text, answer and identity states.
+- Added all-pairings/source-match views, answer-label search and accurate unpaired counts that include ambiguous and repeated QIDs.
+- Made available full wording and answer lists inspectable for every row.
+- Added candidate wording/path/entity previews, separate human pairing confirmation, optional inspection marks and next-exception navigation.
+- Export includes all QRE entries and separate CF coverage candidates, complete available source fields, original numbered lines and review state.
 
-- 48 QRE entries; 45 mapped; 16 source matches; 5 direct-mapping differences; 26 review verdicts; 1 unmapped.
-- **6 observed source changes**, one of which has unconfirmed question pairing.
-- **25 other reviews** with no directly observed text/answer change; many involve CF grids, dynamic content, or incomplete source information.
-- 89 unpaired respondent-text CF candidates remain separate from confirmed defects.
+## Correctness fixes
 
-Review counts must not be interpreted as numbers of defects. Exact live-survey rendering is out of scope.
+- Capitalization-only source changes are visible.
+- Numeric prefixes and literal annotations in CF answer labels are preserved.
+- Grid rows are not compared as though parent wording were their own.
+- Unclassified QRE paragraphs prevent false clean matches and are shown for review.
+- Typed answer numbering is retained in original form and flagged when ambiguous; Word automatic numbering preserves literal respondent numbers.
+- A manually selected pairing remains provisional until separately confirmed.
+- Confirmation cannot bypass shared-node conflicts, grid-row limitations, missing translations, dynamic content or incomplete extraction.
+
+## Supplied study check
+
+Language 7: 48 QRE entries, 45 paired, 14 static matches, 6 observed changes, 25 other paired reviews and 3 unpaired entries. One observed change has provisional identity.
+
+Language 9: 48 QRE entries, 45 paired, 8 static matches and 9 observed changes. Review state resets when a new comparison is run.
+
+These are source-comparison results, not confirmed live-survey defect counts. The lower match count reflects newly surfaced extraction/numbering uncertainty.
