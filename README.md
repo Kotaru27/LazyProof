@@ -1,4 +1,4 @@
-# LazyProof — Survey text QA (v0.5)
+# LazyProof — Survey text QA (v0.6)
 
 A privacy-oriented, static browser tool for comparing a Word QRE (`.docx`) against a Confirmit survey definition (`.xml` or `.zip`). No server, paid API, or AI inference is required. Files are processed locally in your browser.
 
@@ -9,12 +9,12 @@ A privacy-oriented, static browser tool for comparing a Word QRE (`.docx`) again
 1. Upload the Word questionnaire and matching Confirmit XML/ZIP survey definition.
 2. **Select a survey language** from the identifiers the XML declares. LazyProof does not guess or select one automatically. The XML project default is labeled where available.
 3. Select **Compare files**. The report starts with differences. Switch to **Needs review** for ambiguous IDs, abbreviated answers, missing translations and structural cases.
-4. Select a finding to read complete QRE and CF text side-by-side; matching tokens are green and changed tokens red. When a mapping seems wrong, open **Correct question mapping** and search relevant CF question IDs/titles.
+4. Select a finding to read complete QRE and CF respondent wording side-by-side (including the XML's separate Instructions field); matching tokens are green and changed tokens red. When a mapping seems wrong, open **Correct question mapping** and search relevant CF question IDs/titles.
 5. Export CSV to retain all discrepancies and unresolved review findings, excluding matches.
 
 ## Important limitations
 
-The result is a **source-text comparison**, not proof that the rendered interview is correct. Language ID labels are deliberately neutral when the XML does not supply a reliable language name. Logic, piping, conditions, grid rows, Word revisions, source versions and image-only options can require manual investigation. Only recognized QRE question IDs are counted, so coverage is not a guarantee that every QRE element has been extracted. Review findings must not be counted as verified matches.
+The result is a **source-text comparison**, not proof that the rendered interview is correct. Language ID labels are deliberately neutral when the XML does not supply a reliable language name. Logic, piping, conditions, grid rows, Word revisions, source versions and image-only options can require manual investigation. The Word parser distinguishes programming notes and section headings from respondent copy, but document-specific structures can still require review. Only recognized QRE question IDs are counted, so coverage is not a guarantee that every QRE element has been extracted. Review findings must not be counted as verified matches.
 
 ## Deployment
 

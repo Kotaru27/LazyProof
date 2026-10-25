@@ -1,26 +1,19 @@
-# LazyProof v0.5 — Review-first upgrade
+# LazyProof v0.6 — Respondent-text accuracy release
 
-This release changes the report presentation and two verified correctness risks without redesigning the source-extraction architecture.
+## Corrected findings
 
-## User-facing changes
+- Compare QRE respondent wording against **both** the selected XML language's question `Text` and `Instruction` fields. The original XML fields remain separate in source data. Display and CSV export now show the combined visible wording; no text is fetched from another language.
+- Retain respondent-facing QRE instructions placed immediately before answers. Previously, the presence of any answer list could cause those instructions to be omitted.
+- Stop misclassifying answer labels (for example region names and "Social Media") as question headings. Recognize genuine chapter boundaries so their names are not mistaken for answer options, and do not include region quota tables as response options.
+- Treat scripted brand-piping replacements and uncertain dynamic answer labels as `Needs review`, rather than confirmed text/answer mismatches. Actual substitutions are not verified by the XML parser.
+- Recognize a trailing `open end` programming marker on a QRE answer label without interpreting that marker as respondent-facing wording.
 
-- Read the available survey language identifiers from the uploaded Confirmit XML. Do **not** select a language automatically; require the user to choose one. Label the XML's project default accurately, without guessing that a numeric ID means German, English, or another language.
-- Fill most of the desktop viewport with the report. The navigation list and the complete QRE/CF text comparison have stronger sizing and contrast. Compare texts in parallel on wider desktops, stacked on narrower screens.
-- Open the results on **Differences**. Keep **Needs review**, **Unmapped**, and **All findings** available in the filter, without treating unverified questions as matches.
-- Show the primary review reason immediately when there is no text or answer delta; hide extra technical notes under a disclosure.
-- Replace the giant manual-mapping `<select>` with a compact, searchable set of plausible respondent-question candidates. Exclude empty internal variables from that shortlist.
-- Keep CSV export semantics: export all non-matching and unverified source comparisons, not exact matches, irrespective of the current visual filter. This preserves coverage information.
+## Preserved behavior
 
-## Meaningful correctness fixes
+- No UI redesign, no new dependencies, no change to user-controlled language selection or local-only file import.
+- Exact matches hidden; user can review discrepancies and uncertain cases separately, override question mapping, search, and export CSV.
+- Conservative QID/title matching, shared answer lists, XML locale isolation and Word extraction remain in place.
 
-- Reject extra CF text appended to a QRE sentence instead of silently accepting its prefix as an exact match.
-- Reject invalid replacement file selections without leaving an older valid file silently active.
+## Limits
 
-## Scope retained
-
-- DOCX / CF XML or ZIP import; local JSZip; language-isolated CF fields; conservative QID/title mapping; shared answer references; complete word-level diff; manual override; search; CSV; no external API.
-- No live-survey verification, automatic routing/loop certification, or full formatting comparison. Grid and ambiguous cases remain flagged for human review.
-
-## Evidence
-
-`test_v05.py` and `visual_check.py` were executed in a cloud Chromium environment using local injected production assets because direct file navigation is restricted. Tests cover both project language choices, selection-gate behavior, candidate mapping, full-text differences, CSV, stale upload rejection, mobile/desktop overflow and runtime errors. These are not proof of real-user survey QA accuracy.
+The tool compares survey source definitions, not the rendered experience. It does not certify dynamic piping, routing, grid rows, all Word formatting, text inside media assets, or unrecognized unnumbered questions. Unresolved content remains review-only; zero displayed discrepancies does not prove complete survey equivalence.

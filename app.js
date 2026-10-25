@@ -72,9 +72,9 @@ function renderResults(selected=chosen){
  $('coverage-note').textContent=`${s.mapped}/${s.qre} mapped · XML language ${cf.selectedLanguage} · ${s.matches} matches hidden`; 
  chosen=selected;refreshVisible();
 }
-function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||r.verdict===filter)&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,r.cf?.text].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
+function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||r.verdict===filter)&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,P.respondentText(r.cf)].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
 function refreshVisible(){const rows=filteredRows();if(!rows.some(r=>r.key===chosen))chosen=rows[0]?.key||null;renderList();renderDetail();}
-function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(types.includes('text'))return 'Question wording changed';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
+function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(types.includes('text'))return 'Question wording changed';if(types.includes('dynamic-text'))return 'Variable wording needs review';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
 function renderList(){
  const rows=filteredRows();$('visible-count').textContent=`${rows.length} items`;
  const holder=$('question-list');holder.replaceChildren();
@@ -92,8 +92,8 @@ function fullDiffHtml(parts){
 }
 function textDiffSection(q,c){
  // Each side is complete. Colour only reflects word/token alignment.
- const pair=P.fullComparison(q.text,c.text);
- return `<section class="diff-section" aria-label="Full question wording comparison"><div class="section-title">Question text <span>Full text · Green matches / Red differs</span></div>`+
+ const pair=P.fullComparison(q.text,P.respondentText(c));
+ return `<section class="diff-section" aria-label="Full question wording comparison"><div class="section-title">Respondent wording <span>Text + instructions · Green matches / Red differs</span></div>`+
  `<div class="diff-pair"><div class="diff-line"><strong>QRE</strong><p>${fullDiffHtml(pair.qre)}</p></div>`+
  `<div class="diff-line"><strong>CF</strong><p>${fullDiffHtml(pair.xml)}</p></div></div></section>`;
 }
@@ -138,7 +138,7 @@ function renderDetail(){
  if(!r){host.innerHTML='<div class="detail-empty"><h3>No finding selected</h3><p>Choose a different filter to review other items.</p></div>';return;}
  const c=r.cf,q=r.q;
  const issues=r.issues.filter(x=>x.level!=='info');
- const textIssue=issues.some(x=>x.type==='text'||x.type==='empty-text');
+ const textIssue=issues.some(x=>x.type==='text'||x.type==='empty-text'||x.type==='dynamic-text');
  let html=`<div class="detail-head"><div><h3>${escape(q.qid)}</h3><div class="detail-subtitle">${escape(q.title||'Question')} ${c?`· CF ${escape(c.qid)}`:''}</div></div><span class="status large ${r.verdict}">${labels[r.verdict]}</span></div>`;
  if(textIssue&&c&&!c.missingRequested)html+=textDiffSection(q,c);
  html+=answerDiffSection(r);
@@ -147,7 +147,7 @@ function renderDetail(){
   const primary=issues.find(x=>x.level==='review')||issues[0];
   if(primary)html+=`<p class="inline-finding"><strong>${escape(shortFinding(r))}</strong><span>${escape(primary.message)}</span></p>`;
  }
- const remaining=issues.filter(i=>!(i.type==='text'||i.type==='answers'||i.type==='empty-text'));
+ const remaining=issues.filter(i=>!(i.type==='text'||i.type==='answers'||i.type==='empty-text'||i.type==='dynamic-text'));
  if(remaining.length>1||(remaining.length===1&&(textIssue||issues.some(x=>x.type==='answers')))){
   html+=`<details class="findings-expand"><summary>Other verification notes <span>${remaining.length}</span></summary><div class="findings-body">`;
   for(const issue of remaining)html+=`<div class="notice ${escape(issue.level)}">${escape(issue.message)}</div>`;
@@ -163,10 +163,10 @@ function csvCell(v){let s=String(v??'').replace(/\r?\n/g,' ');if(/^[\s]*[=+@\-\t
 function downloadCSV(){if(!result)return;
  const head=['QRE QID','QRE title','CF QID','CF title','Status','XML language','Mapping method','Complete QRE question','Complete CF question','QRE options not matched in CF','CF options not matched in QRE','Findings'];
  const rows=result.rows.filter(r=>r.verdict!=='match').map(r=>{
-  const hasTextIssue=r.issues.some(i=>i.type==='text'||i.type==='empty-text');
+  const hasTextIssue=r.issues.some(i=>i.type==='text'||i.type==='empty-text'||i.type==='dynamic-text');
   const showText=hasTextIssue&&r.cf&&!r.cf.missingRequested;
   const a=r.issues.find(i=>i.type==='answers');
-  return [r.q.qid,r.q.title,r.cf?.qid||'',r.cf?.title||'',r.verdict,cf.selectedLanguage,r.reason,showText?r.q.text:'',showText?r.cf.text:'',(a?.missing||[]).join(' | '),(a?.extra||[]).join(' | '),r.issues.filter(i=>i.level!=='info').map(i=>i.type+': '+i.message).join(' | ')];
+  return [r.q.qid,r.q.title,r.cf?.qid||'',r.cf?.title||'',r.verdict,cf.selectedLanguage,r.reason,showText?r.q.text:'',showText?P.respondentText(r.cf):'',(a?.missing||[]).join(' | '),(a?.extra||[]).join(' | '),r.issues.filter(i=>i.level!=='info').map(i=>i.type+': '+i.message).join(' | ')];
  });
  const csv='\uFEFF'+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lazyproof-survey-qa-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);

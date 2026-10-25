@@ -1,12 +1,24 @@
-# LazyProof v0.5 verification
+# LazyProof v0.6 verification evidence
 
-- Scope: two privately supplied demo-study files (Word questionnaire and matching Confirmit survey definition). Their contents are not bundled with the application; the current verification note omits their filenames.
-- Environment: cloud Chromium / Playwright, in-memory page assembled from exact static release JS/CSS. Browser navigation to `file://` was blocked by the execution policy; the app was rendered with `set_content` and `add_script_tag`.
-- Input options: placeholder unselected, IDs 7 and 9 from XML; 7 marked project default; Analyze disabled until user selects a language.
-- Language 7 demo: 48 QRE items; 43 mapped; 8 source matches hidden; 13 possible differences; 27 needs review; 0 classified `unmapped` (5 ambiguous items are part of review). 13 differences displayed by default; 40 non-match/review findings exported to CSV.
-- Language 9 demo: 48 QRE items; 43 mapped; 6 source matches hidden; 16 possible differences; 26 needs review. No question titles/text borrowed from another selected language.
-- Regression: full text rendered on both sides, per-word green/red markers; searchable mapping alternatives, manual override/reset; internal variables such as SMSVersion/PID excluded; abbreviation review retains visible reason; changing the XML to a single-language definition resets selection; invalid replacement cannot reuse old file.
-- Correctness probe: additional CF wording following an otherwise exact QRE sentence is now a mismatch rather than accepted as equivalent.
-- Desktop smoke test at 1366x768 and 2560x1440: no horizontal overflow. 2560 wide layout 2360 CSS pixels; 1366 wide layout about 1298 CSS pixels.
-- No JavaScript page errors or external web requests observed during recorded test.
-- Not verified: hosted-page client browser test, accessibility audit, real respondent-rendering equivalence, complete routing/piping/grid correctness, all possible survey exports.
+The regression checks were executed in a cloud Chromium runtime using a privately supplied Word QRE and corresponding Confirmit survey export. These source documents are **not included** in the published repository or ZIP.
+
+## Confirmed from actual demo inputs (XML language 7)
+
+- 48 recognized QRE questions, 43 mapped, 14 source matches, 6 potential discrepancies, 28 review cases, 0 unmapped.
+- QRE/CF pairs `oqd3`, `cqd4`, `oqBF2_x`, `cq2000`, `cq3100_X`, `cq3200_X` correctly classified as matches after handling XML Instructions, QRE instruction text, list/section boundaries and quota tables.
+- `cqd4` now yields 16 QRE region answer labels; `cq3100_X` 10 options; `cq2000` 12 options; `progRH9` 4 options.
+- Genuine wording differences (including `cq1200_x` and `cq5200_x`) stay flagged; variable-branded `oqoe4_x` and `cqcp7_x` remain for human review.
+- The CSV excludes exact matches, includes complete combined CF respondent wording for mismatches, and retains review cases.
+
+## Synthetic regressions
+
+- Exact QRE sentence matching XML Text + Instructions is a match.
+- Changed, omitted, or additional XML instructions are a mismatch.
+- Dynamic text placeholder is review-only.
+- Similar-looking answer labels are not split into false question headings.
+- User chooses language explicitly; English/German label guesses are not made from IDs. Language 9 uses only language-9 XML entries.
+- Browser test had no JavaScript page errors or outgoing web requests.
+
+## Verification limitations
+
+The Chromium harness injected the exact release HTML/CSS/JS into a browser page because the test environment restricts direct file/host navigation. The public GitHub Pages deployment must be checked separately. No claim of comprehensive QA accuracy or all possible survey logic paths is made.

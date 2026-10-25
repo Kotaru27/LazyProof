@@ -77,7 +77,21 @@ function parseWordBlocks(doc){
 const QID_RE=/^\s*((?:(?:[coh]?q)[a-z0-9_]*\d[a-z0-9_]*(?:\s+_[a-z0-9]+)*|progrh\d+))\s*(?:\/\s*[A-Za-z]{1,5}[A-Za-z0-9_]*\d[A-Za-z0-9_]*\s*)?[.:]\s*(.*)$/i;
 const META_RE=/^(?:note\s+to|routing\s*:|if\s+|only\s+ask|show\s+if|continue\s+only|quality\s*:|soft\s+quota|hard\s+quota|please\s+program|please\s+use|close\s+if|do\s+not|cell\s*\d|\[insert|n\s*=|total\s+n|this\s+is|red\s+herring|answer\s*\d+\s*:|rows\s+[xy]|answers\s+[xy])/i;
 const HEADING_RE=/\[\s*(?:SA|MA|OE|Text|Grid|N|Video|Audio|Image|Rating|Dropdown|Single|Multi|Numeric)(?:\b|\s|[-\]])/i;
-function isQuestionTitle(s){return Boolean(HEADING_RE.test(s)||(/^[A-Z][^?!]{3,75}$/.test(s)&&/^(?:Gender|Age|Occupation|Aided|Unaided|Non.Rejector|Consideration|Preference|Region|Brand|Open|Creative|Advertising|Ad Awareness|Rating|Feedback|Closing|Red Herring|Plant|Parent|Store|Household|Attitude|Relationship|Celebrity|Social|Type of|B2S|Privacy|Survey introduction|Intro)/i.test(s)));}
+// Avoid the previous broad prefix heuristic: it misidentified ordinary answers like
+// 'Brandenburg' and 'Social Media' as a new question heading, truncating lists.
+function isQuestionTitle(s){
+ const value=norm(s);
+ if(HEADING_RE.test(value))return true;
+ if(/^(?:Red Herring\s+\d+|Advertising awareness|Creative Evaluation|Custom Questions|Demographic|Celebrity Deep Dive)$/i.test(value))return true;
+ // Numbered chapter headings are boundaries, never answer choices.
+ return /^\d+(?:\.\d+)*\.\s+(?:Creative Evaluation|Custom Questions|Demographic|Advertising awareness|Introduction(?: & screening)?|Category Usage(?: & Brand Funnel)?|Closing)\b/i.test(value);
+}
+function isRespondentLead(s){
+ const t=norm(s);
+ if(!t||/^(?:Answers|SHOW|Do not show|INFO BOX|Aldi Regions|South|North|East|West|Cell\s*\d+|Rows?\s+[xy]|\[[^\]]+\])$/i.test(t))return false;
+ if(/^(?:NOTE|ROUTING|ONLY|IF|QUALITY|CLOSE|SHOW|Soft quota|Hard quota|Please programme|Please show|[A-Z]{2,}\s*:)/i.test(t))return false;
+ return /^(?:\(?Bitte\b|Kreuzen\b|Wählen\b|Markieren\b|Tragen\b|Die meisten\b|Falls\b|Es sind\b|Please\b|Select\b|Tick\b|Welche\b|Was\b|Wie\b|Warum\b|Wo\b|Sind\b|Sie\s+(?:können|dürfen)\b)/i.test(t);
+}
 function cleanQreText(s){
  // Remove only known bracketed programming annotations; parenthesized respondent text stays intact.
  return norm(s.replace(/\s*Soft quota[^\n]*$/i,'').replace(/\[(?:Screenout|Screen-out|KO|Anchor|Exclusive|Exlusive|if alone[^\]]*|\s*à\s*KO[^\]]*|CLOSE|NOTE TO RM|Single choice|Multiple choice|Randomize(?:d)?|Optional)\]/gi,''));
@@ -98,13 +112,28 @@ function splitQre(blocks){
   current.partialOptions=options.some(x=>/^(?:\.{2,}|…)$/.test(x));
   current.options=[...new Set(options.filter(x=>x&&!/^(?:\.{2,}|…)$/.test(x)))];
   current.additional=notes.filter(Boolean);
-  current.text=cleanQreText([current.stem,...(current.additional.length&&current.additional[0]?.length<180&&!META_RE.test(current.additional[0])&&!current.options.length?[current.additional[0]]:[])].join(' '));
+  // Questionnaire stem and respondent instructions can precede answer options.
+  // The prior !options.length check dropped instructions for MA/SA questions.
+  // Keep the original text and options separate, without pulling in table labels.
+  const firstOption=content.findIndex(b=>b.isOption);
+  const leading=(firstOption<0?content:content.slice(0,firstOption))
+    .filter(b=>b.text&&!META_RE.test(b.text)).map(b=>cleanQreText(b.text));
+  const copy=[current.stem];
+  for(const line of leading){
+   if(!isRespondentLead(line)||line.length>700)continue;
+   const accumulated=norm(copy.join(' ')).toLocaleLowerCase();
+   if(accumulated.includes(norm(line).toLocaleLowerCase()))continue;
+   copy.push(line);
+  }
+  current.text=cleanQreText(copy.join(' '));
   current.ignoredLines=content.length-lines.length;
   delete current.lines;delete current.stem;
   q.push(current);current=null;
  }
  for(let i=0;i<blocks.length;i++){
   const b=blocks[i],s=b.text;
+  // Region quota tables are project-level programming data, not answer options.
+  if(current && /^Please use region quota\b/i.test(s)){finish();continue;}
   if(isQuestionTitle(s) && !QID_RE.test(s)){
    // New headings delimit QRE question even when the following question lacks a coded ID.
    if(current)finish();title=s;continue;

@@ -3,8 +3,12 @@
 const esc=(s)=>String(s??'');
 function normalizeText(s){return P.normalize(s).replace(/\s+([.,!?;:])/g,'$1').toLocaleLowerCase();}
 function exact(a,b){return normalizeText(a)===normalizeText(b);}
+// Confirmit authoring separates visible Question Text from visible Instructions.
+// Both belong to the respondent-facing copy, but are retained as distinct source fields.
+function respondentText(cf){return [cf?.text,cf?.instruction].filter(s=>String(s||'').trim()).join('\n').trim();}
+function hasDynamic(s){return /\^[^\^\n]+\^/.test(String(s||''));}
 function codeClean(s){return String(s||'').toLowerCase().replace(/^([coh])q/,'q').replace(/_x$/,'').replace(/_y$/,'');}
-function cleanOption(s){return P.normalize(String(s||'').replace(/^\s*\d{1,4}\.\s*/,'').replace(/\s*\[(?:screenout|screen-out|anchor|exlusive(?:\. anchor)?|exclusive(?:, anchor)?|ko|if alone[^\]]*)\]\s*/ig,'').replace(/\s*\(\s*(?:naturall?\s+fallout|exclusive|anchor|exlusive)(?:[,. ]+(?:anchor|exclusive))?\s*\)\s*$/ig,'')).replace(/\s+/g,' ').trim();}
+function cleanOption(s){return P.normalize(String(s||'').replace(/:\s*open\s+end\s*(?:\(anchor\))?\s*$/i,':').replace(/^\s*\d{1,4}\.\s*/,'').replace(/\s*\[(?:screenout|screen-out|anchor|exlusive(?:\. anchor)?|exclusive(?:, anchor)?|ko|if alone[^\]]*)\]\s*/ig,'').replace(/\s*\(\s*(?:naturall?\s+fallout|exclusive|anchor|exlusive)(?:[,. ]+(?:anchor|exclusive))?\s*\)\s*$/ig,'')).replace(/\s+/g,' ').trim();}
 function titleKey(s){return P.normalize(s).replace(/\[[^\]]+\]/g,'').replace(/\b(?:randomise|randomize|randomized|answers|sa|ma|oe|text|grid|single choice|multiple choice)\b/gi,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();}
 function bagDifference(qreOptions,xmlOptions){
  const left=qreOptions.map(x=>cleanOption(x)).filter(Boolean);
@@ -16,13 +20,16 @@ function bagDifference(qreOptions,xmlOptions){
 function classify(q,cf,reason){
  const issues=[];
  if(reason==='grid-parent')return {verdict:'review',issues:[{type:'grid-row',level:'review',message:'QRE item maps to a CF grid parent. Row-level wording cannot be automatically established from this question-level pairing.'}],answers:{missing:[],extra:[],referenceCount:q.options.length,actualCount:cf.options.length}};
- let qText=q.text||'';const cfText=cf.text||'';
- // Text is exact only after whitespace/punctuation normalization. XML may append visible instructions to a text field.
+ let qText=q.text||'';const cfText=respondentText(cf);
+ // Compare complete respondent-facing copy, including the XML's separate Instructions.
  const qt=normalizeText(qText), ct=normalizeText(cfText);
+ const dynamicCopy=hasDynamic(cfText)||hasDynamic(qText);
  const validText=Boolean(qt && qt===ct); // Never silently accept extra programmed wording after the QRE sentence.
  if(!qt)issues.push({type:'unparsed-text',level:'review',message:'QRE question wording was not extracted.'});
  else if(!ct)issues.push({type:'empty-text',level:cf.missingRequested?'review':'mismatch',message:cf.missingRequested?'This question has no entry for the selected XML language; no other language was used.':'Programmed question text is empty in the selected language.'});
- else if(!validText)issues.push({type:'text',level:'mismatch',message:'Question wording differs.'});
+ else if(!validText)issues.push(dynamicCopy?
+  {type:'dynamic-text',level:'review',message:'Programmed wording contains a variable expression. Static text differs, but the rendered value cannot be confirmed from XML alone.'}:
+  {type:'text',level:'mismatch',message:'Question wording differs.'});
  // Do not declare an option missing merely because its selected-language label is absent.
  const unlocalizedAnswers=cf.options.filter(o=>o.missingRequested&&!o.text&&!o.image).length;
  const ans=bagDifference(q.options||[],cf.options||[]);
@@ -32,7 +39,9 @@ function classify(q,cf,reason){
   else if(ans.missing.length||(ans.extra.length&&!q.partialOptions)){
    // Grid and loop answers may be flattened differently: classify for review to avoid a false definitive mismatch.
    const grid=cf.type==='Grid';
-   issues.push({type:'answers',level:grid?'review':'mismatch',message:`Answer differences: ${ans.missing.length} absent from XML; ${q.partialOptions?'extra answers not fully compared (abbreviated QRE)':ans.extra.length+' extra in XML'}.`,missing:ans.missing,extra:q.partialOptions?[]:ans.extra});
+   const dynamicOptions=cf.options.some(o=>hasDynamic(o.text));
+   const provisional=grid||dynamicOptions||q.partialOptions;
+   issues.push({type:'answers',level:provisional?'review':'mismatch',message:provisional?'Answer comparison is inconclusive for grid rows, variable expressions, or abbreviated lists.':'Answer options differ.',missing:ans.missing,extra:q.partialOptions?[]:ans.extra});
   }
  }
  if(q.partialOptions)issues.push({type:'abbreviated-list',level:'review',message:'QRE answer list uses an ellipsis; extra XML answers cannot be reliably classified.'});
@@ -40,7 +49,7 @@ function classify(q,cf,reason){
  if(cf.hidden)issues.push({type:'hidden',level:'review',message:'This XML node is hidden or excluded from layout; respondent visibility is not verified.'});
  if(cf.options.some(o=>o.unresolvedRef))issues.push({type:'references',level:'review',message:'An answer list reference could not be resolved.'});
  if(cf.type==='Grid')issues.push({type:'grid',level:'review',message:'Grid rows/scales may not correspond one-to-one with QRE answer lines; inspect manually.'});
- if(/\^[^\^\n]+\^/.test(cf.text||''))issues.push({type:'piping',level:'review',message:'Question includes dynamic expressions; rendered text cannot be verified from XML.'});
+ if(dynamicCopy||cf.options.some(o=>hasDynamic(o.text)))issues.push({type:'piping',level:'review',message:'Survey contains variable text; actual substitutions need a respondent-path check.'});
  if(q.options?.length===0 && cf.options.length>0)issues.push({type:'answers-unparsed',level:'review',message:'XML contains answer options but QRE answer options were not confidently extracted.'});
  if(reason==='title')issues.push({type:'mapping',level:'review',message:'Matched by unique title rather than question identifier. Confirm this mapping.'});
  if(reason==='grid-parent')issues.push({type:'mapping',level:'review',message:'QRE question may be a row of a CF grid; validate row-level mapping before approving.'});
@@ -81,5 +90,5 @@ function compare(qre,cf,manual={}){
  const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,extras:sourceExtra.length};
  return {rows:out,sourceExtra,summary,created:new Date().toISOString()};
 }
-P.compare=compare;P.titleKey=titleKey;P.cleanOption=cleanOption;P.classify=classify;
+P.compare=compare;P.titleKey=titleKey;P.cleanOption=cleanOption;P.classify=classify;P.respondentText=respondentText;
 })(window.LazyProof=window.LazyProof||{});
