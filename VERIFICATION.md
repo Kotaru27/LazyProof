@@ -1,6 +1,6 @@
 # LazyProof v0.5 verification
 
-- Scope: original two uploaded demo files `P110843_38_Aldi_Nachwuchskräfte_Confirmit_SP_Instructions_v2_20261021.docx` and `p474943337087.zip`.
+- Scope: two privately supplied demo-study files (Word questionnaire and matching Confirmit survey definition). Their filenames and contents are deliberately omitted from the public repository.
 - Environment: cloud Chromium / Playwright, in-memory page assembled from exact static release JS/CSS. Browser navigation to `file://` was blocked by the execution policy; the app was rendered with `set_content` and `add_script_tag`.
 - Input options: placeholder unselected, IDs 7 and 9 from XML; 7 marked project default; Analyze disabled until user selects a language.
 - Language 7 demo: 48 QRE items; 43 mapped; 8 source matches hidden; 13 possible differences; 27 needs review; 0 classified `unmapped` (5 ambiguous items are part of review). 13 differences displayed by default; 40 non-match/review findings exported to CSV.
