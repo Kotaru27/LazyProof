@@ -10,16 +10,17 @@ function descendants(el,name){return Array.from(el?.getElementsByTagName(name)||
 function txt(el){return (el?.textContent||'').trim();}
 function parseXML(str){const d=new DOMParser().parseFromString(str,'application/xml');if(d.getElementsByTagName('parsererror').length)throw Error('Invalid XML. Make sure this is a Confirmit survey definition, not a respondent export.');return d;}
 function stripMarkup(s){
- const safe=String(s||'').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi,'').replace(/<(?:img|iframe|object|embed|audio|video|source|track|link|meta|picture|svg|image|use)\b[^>]*>/gi,'');
+ const safe=String(s||'').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi,'').replace(/<(?:iframe|object|embed|audio|video|source|track|link|meta|picture|svg|image|use)\b[^>]*>/gi,'');
  const doc=new DOMParser().parseFromString('<div>'+safe+'</div>','text/html');
  doc.querySelectorAll('script,style,noscript,svg,iframe,template').forEach(n=>n.remove());
+ doc.querySelectorAll('[style],[hidden],[aria-hidden]').forEach(n=>{const inline=n.getAttribute('style')||'';if(n.hasAttribute('hidden')||n.getAttribute('aria-hidden')==='true'||/display\s*:\s*none|visibility\s*:\s*hidden/i.test(inline))n.remove();});
  doc.querySelectorAll('br').forEach(n=>n.replaceWith('\n'));
  doc.querySelectorAll('img').forEach(n=>{const a=n.getAttribute('alt')||'';n.replaceWith(document.createTextNode(a?' '+a+' ':' '));});
  doc.querySelectorAll('p,div,li,h1,h2,h3,h4').forEach(n=>n.appendChild(document.createTextNode('\n')));
  return (doc.body?.textContent||'').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').trim();
 }
 function norm(s){return String(s||'').normalize('NFKC').replace(/\u00a0/g,' ').replace(/[\u2018\u2019]/g,"'").replace(/\s+/g,' ').trim();}
-function canonicalId(s){return norm(s).toLowerCase().replace(/^([coh])q/,'q').replace(/(?:_[xy])+(?:_\d+)?$/i,'').replace(/_(\d+)_?[xy]?$/,'');}
+function canonicalId(s){return norm(s).toLowerCase().replace(/^([coh])q/,'q').replace(/(?:_[xy])+(?:_\d+)?$/i,'');}
 async function openZip(file){
  if(!file || file.size>MAX_FILE)throw Error('Choose a ZIP/DOCX file smaller than 35 MB.');
  let z;try{z=await JSZip.loadAsync(file);}catch(e){throw Error('Unable to open ZIP/DOCX: '+e.message);}
@@ -29,28 +30,32 @@ async function openZip(file){
 }
 async function readZipEntry(entry){if(!entry)throw Error('Required XML entry not found.');if(entry._data?.uncompressedSize>MAX_XML)throw Error('ZIP entry is too large to decompress safely.');const raw=await entry.async('uint8array');if(raw.length>MAX_XML)throw Error('Expanded XML exceeds the 40 MB limit.');return new TextDecoder('utf-8').decode(raw);}
 function wordP(el){
- const runs=[];let hasStrike=false,hasHighlight=false,hasBold=false,hasItalic=false;
+ const runs=[];let hasStrike=false,hasHighlight=false,hasBold=false,hasItalic=false,hadStruckText=false;
+ function strikeEnabled(pr){
+  return ['strike','dstrike'].some(k=>{const el=direct(pr,k);if(!el)return false;const value=el.getAttributeNS(WORD,'val')||el.getAttribute('val');return !/^(?:0|false|off)$/i.test(value||'');});
+ }
  function visit(node){
   for(const ch of node.children||[]){const n=ch.localName;
    if(n==='del'||n==='delText'||n==='instrText')continue;
+   if(n==='r'){
+    const pr=direct(ch,'rPr'),struck=strikeEnabled(pr);
+    hasStrike ||= struck;
+    hasHighlight ||= Boolean(direct(pr,'highlight'));
+    hasBold ||= Boolean(direct(pr,'b'));
+    hasItalic ||= Boolean(direct(pr,'i'));
+    if(struck){hadStruckText ||= Boolean(ch.textContent?.trim());continue;}
+   }
    if(n==='t'){runs.push(ch.textContent||'');continue;}
    if(n==='tab'){runs.push('\t');continue;}
    if(n==='br'){runs.push(' ');continue;}
    if(n==='rPr')continue;
-   if(n==='r'){
-    const pr=direct(ch,'rPr');
-    hasStrike ||= Boolean(direct(pr,'strike')||direct(pr,'dstrike'));
-    hasHighlight ||= Boolean(direct(pr,'highlight'));
-    hasBold ||= Boolean(direct(pr,'b'));
-    hasItalic ||= Boolean(direct(pr,'i'));
-   }
    visit(ch);
   }
  }
  visit(el);
  const pr=direct(el,'pPr'), style=direct(pr,'pStyle')?.getAttributeNS(WORD,'val')||'';
  const num=direct(pr,'numPr')!==null;
- return {text:norm(runs.join('')),style,num,kind:'paragraph',hasStrike,hasHighlight,hasBold,hasItalic};
+ return {text:norm(runs.join('')),style,num,kind:'paragraph',hasStrike,hadStruckText,fullyStruck:hadStruckText&&!norm(runs.join('')),hasHighlight,hasBold,hasItalic};
 }
 function parseWordBlocks(doc){
  const body=Array.from(doc.getElementsByTagNameNS(WORD,'body'))[0];
@@ -60,7 +65,7 @@ function parseWordBlocks(doc){
   for(const child of Array.from(container.children)){
    const k=child.localName;
    if(k==='p'){
-    let b=wordP(child);if(b.text){out.push({...b,index:++pIndex,tableId});}
+    let b=wordP(child);if(b.text||b.hadStruckText){out.push({...b,index:++pIndex,tableId});}
    }else if(k==='tbl'){
     const tid='table-'+(out.filter(x=>x.kind==='table').length+1)+'-'+(pIndex+1);
     for(const row of children(child,'tr')){
@@ -74,17 +79,23 @@ function parseWordBlocks(doc){
  walk(body);return out;
 }
 // QRE QID recognition deliberately excludes cross-reference phrases in routing notes.
-const QID_RE=/^\s*((?:(?:[coh]?q)[a-z0-9_]*\d[a-z0-9_]*(?:\s+_[a-z0-9]+)*|progrh\d+))\s*(?:\/\s*[A-Za-z]{1,5}[A-Za-z0-9_]*\d[A-Za-z0-9_]*\s*)?[.:]\s*(.*)$/i;
-const META_RE=/^(?:note\s+to|routing\s*:|if\s+|only\s+ask|show\s+if|continue\s+only|quality\s*:|soft\s+quota|hard\s+quota|please\s+program|please\s+use|close\s+if|do\s+not|cell\s*\d|\[insert|n\s*=|total\s+n|this\s+is|red\s+herring|answer\s*\d+\s*:|rows\s+[xy]|answers\s+[xy])/i;
+// QID recognition is structural (identifier + period/colon + wording), not
+// tied to a specific demo-study QID prefix or numeric family.
+const QID_RE=/^\s*([A-Za-z][A-Za-z0-9_]{1,47})\s*(?:\/\s*[A-Za-z][A-Za-z0-9_]*\s*)?[.:]\s*(.*)$/;
+function isQidToken(id){
+ // Accept generic number-bearing IDs (A1, progRH3, cq1200_x) and the
+ // established uppercase-named question style (qGENDER), not ordinary labels.
+ return /\d/.test(id)||/^(?:[COHcoh]?[Qq])[A-Z][A-Za-z0-9_]*$/.test(id);
+}
+const META_RE=/^(?:note\s+to|routing\s*:|if\s+|only\s+ask|show\s+if|continue\s+only|quality\s*:|soft\s+quota|hard\s+quota|please\s+program|close\s+if|do\s+not|cell\s*\d|\[insert|n\s*=|total\s+n|this\s+is|answer\s*\d+\s*:|rows\s+[xy]|answers\s+[xy])/i;
 const HEADING_RE=/\[\s*(?:SA|MA|OE|Text|Grid|N|Video|Audio|Image|Rating|Dropdown|Single|Multi|Numeric)(?:\b|\s|[-\]])/i;
 // Avoid the previous broad prefix heuristic: it misidentified ordinary answers like
 // 'Brandenburg' and 'Social Media' as a new question heading, truncating lists.
-function isQuestionTitle(s){
+function isQuestionTitle(s,style=''){
  const value=norm(s);
- if(HEADING_RE.test(value))return true;
- if(/^(?:Red Herring\s+\d+|Advertising awareness|Creative Evaluation|Custom Questions|Demographic|Celebrity Deep Dive)$/i.test(value))return true;
- // Numbered chapter headings are boundaries, never answer choices.
- return /^\d+(?:\.\d+)*\.\s+(?:Creative Evaluation|Custom Questions|Demographic|Advertising awareness|Introduction(?: & screening)?|Category Usage(?: & Brand Funnel)?|Closing)\b/i.test(value);
+ // Explicit question-type annotations or Word paragraph heading styles.
+ // No client/study-name vocabulary is embedded in the parser.
+ return HEADING_RE.test(value)||(/(?:heading|headline)[ _-]*\d*$/i.test(style)&&value.length<160);
 }
 function isRespondentLead(s){
  const t=norm(s);
@@ -101,7 +112,7 @@ function splitQre(blocks){
  function finish(){
   if(!current)return;
   const content=current.lines;
-  const lines=content.filter(x=>x.text&&!META_RE.test(x.text));
+  const lines=content.filter(x=>x.text&&!x.fullyStruck&&!META_RE.test(x.text));
   // Identify possible answers only when the QRE actually has an answer-list block.
   const options=[],notes=[];
   for(const b of lines){
@@ -111,7 +122,7 @@ function splitQre(blocks){
   }
   // Some Word QREs format response choices as ordinary unnumbered paragraphs.
   // Recover them only when an explicit SA/MA heading and a respondent-facing
-  // selection instruction precede a clear run of 3+ short candidate options.
+  // selection instruction precede a clear run of 2+ short candidate options.
   // Do not use the CF option list as an oracle: unmatched QRE options must remain.
   if(!options.length && /\[\s*(?:SA|MA|Single|Multi)(?:\b|\s|[-\]])/i.test(current.title||'')){
    const lastLead=lines.findLastIndex(b=>!b.isOption && isRespondentLead(b.text));
@@ -122,7 +133,7 @@ function splitQre(blocks){
     const plausible=x=>!x.isOption && x.text.length<=190 && !META_RE.test(x.text) &&
       !isQuestionTitle(x.text) && !isRespondentLead(x.text) &&
       !/^\[.*\]$/.test(x.text) && !/^\d+\.\s*[A-Za-z]/.test(x.text);
-    if(isSelectionInstruction && suffix.length>=3 && suffix.every(plausible)){
+    if(isSelectionInstruction && suffix.length>=2 && suffix.every(plausible)){
      for(const b of suffix)options.push(cleanQreText(b.text));
      // Remove recovered option entries from the free-text notes.
      notes.splice(Math.max(0, notes.length-suffix.length),suffix.length);
@@ -130,7 +141,7 @@ function splitQre(blocks){
    }
   }
   current.partialOptions=options.some(x=>/^(?:\.{2,}|…)$/.test(x));
-  current.options=[...new Set(options.filter(x=>x&&!/^(?:\.{2,}|…)$/.test(x)))];
+  current.options=options.filter(x=>x&&!/^(?:\.{2,}|…)$/.test(x));
   current.additional=notes.filter(Boolean);
   // Questionnaire stem and respondent instructions can precede answer options.
   // The prior !options.length check dropped instructions for MA/SA questions.
@@ -154,21 +165,30 @@ function splitQre(blocks){
   const b=blocks[i],s=b.text;
   // Region quota tables are project-level programming data, not answer options.
   if(current && /^Please\s+(?:use|apply|update|set)\b.*\bquotas?\b/i.test(s)){finish();continue;}
-  if(isQuestionTitle(s) && !QID_RE.test(s)){
+  // A numbered section heading that directly precedes a structured question
+  // heading is a boundary even when the Word author omitted a heading style.
+  const nextBlock=blocks[i+1];
+  const numberedChapter=/^\d{1,2}(?:\.\d{1,2})*\.\s+\S/.test(s)&&!b.num&&!!nextBlock&&
+    (isQuestionTitle(nextBlock.text,nextBlock.style||'')||QID_RE.test(nextBlock.text));
+  if((isQuestionTitle(s,b.style||'')||numberedChapter) && !QID_RE.test(s)){
    // New headings delimit QRE question even when the following question lacks a coded ID.
    if(current)finish();title=s;continue;
   }
+  // Programming metadata is never a new question, even if its prefix looks
+  // like a letter-only QID (e.g. QUALITY: ...).
+  if(META_RE.test(s)){if(current){excluded++;current.lines.push({...b,isOption:false});}continue;}
   const m=s.replace(/\s+_/g,'_').match(QID_RE);
-  if(m && /^[a-z]/i.test(m[1]) && m[1].length>=3){
+  if(m && isQidToken(m[1])){
    finish();
-   const id=m[1].replace(/\s+/g,'');current={qid:id,title:title||'',text:'',options:[],additional:[],lines:[],stem:m[2].trim(),blockIndex:b.index,source:'qre',formatting:{bold:b.hasBold,italic:b.hasItalic,strike:b.hasStrike,highlight:b.hasHighlight}};
+   const id=m[1].replace(/\s+/g,'');current={qid:id,title:title||'',text:'',options:[],additional:[],lines:[],struckContent:!!b.hadStruckText,stem:m[2].trim(),blockIndex:b.index,source:'qre',formatting:{bold:b.hasBold,italic:b.hasItalic,strike:b.hasStrike,highlight:b.hasHighlight}};
    continue;
   }
   if(!current)continue;
   const next=s.match(/^\s*(?:\d{1,4}\.|\d{1,4}\s{2,})(?:\s+)?(.*)$/);
   // Word numbered-list paragraphs often omit the number from w:t; use w:numPr when present.
   const isOption=b.num || (Boolean(next)&& s.length<200);
-  if(META_RE.test(s)){excluded++;current.lines.push({...b,isOption:false});continue;}
+  current.struckContent ||= !!(b.hadStruckText||b.fullyStruck);
+  if(b.fullyStruck){excluded++;continue;}
   current.lines.push({...b,text:(next&&isOption?next[1]:s),isOption});
  }
  finish();return {questions:q,discardedNotes:excluded};

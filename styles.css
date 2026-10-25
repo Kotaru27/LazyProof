@@ -154,3 +154,6 @@
  .diff-line+ .diff-line{border-left:1px solid #e5eee6;padding-left:26px}
  .diff-line strong{display:block;margin-bottom:10px;padding:0}
 }
+
+/* Optional, collapsed coverage review for unpaired CF respondent copy */
+.additional-cf-list{padding:12px 20px;max-height:340px;overflow:auto}.additional-cf-row{display:flex;gap:14px;border-bottom:1px solid #e7ede7;padding:9px 2px;font-size:12px}.additional-cf-row strong{min-width:130px;color:#264a37}.additional-cf-row span{color:#657568;overflow-wrap:anywhere}

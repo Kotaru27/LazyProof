@@ -70,7 +70,20 @@ function renderResults(selected=chosen){
  $('project-name').textContent=(cf.project||cf.projectId||'Confirmit survey')+' · '+(cf.availableLanguages.find(l=>l.id===cf.selectedLanguage)?.name||'Language '+cf.selectedLanguage)+' only';
  $('stat-qre').textContent=s.qre;$('stat-mismatch').textContent=s.mismatches;$('stat-review').textContent=s.review;$('stat-unmapped').textContent=s.unmapped;
  $('coverage-note').textContent=`${s.mapped}/${s.qre} mapped · XML language ${cf.selectedLanguage} · ${s.matches} matches hidden`; 
- chosen=selected;refreshVisible();
+ renderAdditionalCF();chosen=selected;refreshVisible();
+}
+function renderAdditionalCF(){
+ const extra=result.actionableExtras||[];
+ const host=$('additional-cf-list'),count=$('additional-cf-count'),section=$('additional-cf-review');
+ section.hidden=!extra.length;count.textContent=extra.length+' unpaired respondent-text candidates';
+ host.replaceChildren();
+ for(const c of extra.slice(0,150)){
+  const row=document.createElement('div');row.className='additional-cf-row';
+  const name=document.createElement('strong');name.textContent=c.qid;
+  const excerpt=document.createElement('span');excerpt.textContent=c.title||P.respondentText(c).slice(0,120);
+  row.append(name,excerpt);host.append(row);
+ }
+ if(extra.length>150){const t=document.createElement('p');t.textContent=(extra.length-150)+' more unpaired CF candidates are not displayed.';host.append(t);}
 }
 function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||r.verdict===filter)&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,P.respondentText(r.cf)].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
 function refreshVisible(){const rows=filteredRows();if(!rows.some(r=>r.key===chosen))chosen=rows[0]?.key||null;renderList();renderDetail();}

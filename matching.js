@@ -59,13 +59,23 @@ function classify(q,cf,reason){
    issues.push({type:'answers',level:provisional?'review':'mismatch',message:provisional?'Answer comparison is inconclusive for grid rows, variable expressions, or abbreviated lists.':'Answer options differ.',missing:ans.missing,extra:q.partialOptions?[]:ans.extra});
   }
  }
+ if(q.struckContent)issues.push({type:'revised-word',level:'review',message:'Strikethrough wording was excluded from QRE text; confirm whether it is a deleted revision or intended respondent text.'});
  if(q.partialOptions)issues.push({type:'abbreviated-list',level:'review',message:'QRE answer list uses an ellipsis; extra XML answers cannot be reliably classified.'});
  if(cf.missingRequested&&!issues.some(i=>i.type==='empty-text'))issues.push({type:'locale',level:'review',message:'Selected language has no question entry in XML. No other language was used.'});
  if(cf.hidden)issues.push({type:'hidden',level:'review',message:'This XML node is hidden or excluded from layout; respondent visibility is not verified.'});
  if(cf.options.some(o=>o.unresolvedRef))issues.push({type:'references',level:'review',message:'An answer list reference could not be resolved.'});
  if(cf.type==='Grid')issues.push({type:'grid',level:'review',message:'Grid rows/scales may not correspond one-to-one with QRE answer lines; inspect manually.'});
  if(dynamicCopy||cf.options.some(o=>hasDynamic(o.text)))issues.push({type:'piping',level:'review',message:'Survey contains variable text; actual substitutions need a respondent-path check.'});
+ if(q.options?.length===0 && cf.options.length===0 && (['Single','Multi','Ranking','Scale','SingleGrid','MultiGrid'].includes(cf.type)||/\[\s*(?:SA|MA|Single|Multi)\b/i.test(q.title||'')))issues.push({type:'answers-unknown',level:'review',message:'No answer options could be verified in either source for this choice question.'});
  if(q.options?.length===0 && cf.options.length>0)issues.push({type:'answers-unparsed',level:'review',message:'XML contains answer options but QRE answer options were not confidently extracted.'});
+ if(reason==='canonical-qid'){
+  const qk=titleKey(q.title),ck=titleKey(cf.title);
+  const consistent=qk.length>=5&&ck.length>=5&&(qk===ck||(ck.length>=7&&qk.startsWith(ck)));
+  if(!consistent){
+   issues.push({type:'mapping',level:'review',message:'QID normalization suggested this pairing but question titles do not confirm identity.'});
+   for(const issue of issues)if(issue.level==='mismatch')issue.level='review';
+  }
+ }
  if(reason==='title')issues.push({type:'mapping',level:'review',message:'Matched by unique title rather than question identifier. Confirm this mapping.'});
  if(reason==='grid-parent')issues.push({type:'mapping',level:'review',message:'QRE question may be a row of a CF grid; validate row-level mapping before approving.'});
  if(esc(q.qid).toLowerCase()!==esc(cf.qid).toLowerCase())issues.push({type:'qid',level:'info',message:`QIDs differ: ${q.qid} → ${cf.qid}.`});
@@ -107,6 +117,14 @@ function compare(qre,cf,manual={}){
   if(!candidates.length){out.push({q,cf:null,verdict:'unmapped',reason:'none',issues:[{level:'review',type:'missing-map',message:'No unique QID, node-label or title mapping was found. This is not proof that the question is absent.'}],candidates:[],key});continue;}
   match=candidates[0];if(match.type==='Grid' && codeClean(q.qid).startsWith(codeClean(match.qid)+'_'))reason='grid-parent';used.add(match.entityId);
   const r=classify(q,match,reason);
+  // QID equality is not sufficient when both independently supplied titles
+  // identify different questions. Keep the pair inspectable but unverified.
+  const qTitle=titleKey(q.title),cfTitle=titleKey(match.title);
+  if(reason==='qid' && qTitle.length>=5 && cfTitle.length>=5 && qTitle!==cfTitle && !(cfTitle.length>=7&&qTitle.startsWith(cfTitle)) && cfTitle!==titleKey(match.qid)){
+   r.issues=r.issues.map(i=>i.level==='mismatch'?{...i,level:'review'}:i);
+   r.issues.push({type:'identity-conflict',level:'review',message:'QID matches, but QRE and CF titles identify different questions. Verify this mapping before accepting differences.'});
+   r.verdict='review';
+  }
   const source=knownVariantSource(q,match,cf);
   const duplicateVariants=countQ.get(q.qid.toLowerCase())>1;
   if(duplicateVariants && source){
@@ -128,8 +146,12 @@ function compare(qre,cf,manual={}){
   for(const row of group){row.issues.push({type:'duplicate-mapping',level:'review',message:'This CF node is mapped to multiple QRE questions. Confirm the correct pairing.'});if(row.verdict==='match')row.verdict='review';}
  }
  const sourceExtra=cf.questions.filter(x=>!used.has(x.entityId)&&!x.hidden);
- const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,extras:sourceExtra.length};
- return {rows:out,sourceExtra,summary,created:new Date().toISOString()};
+ // Keep potentially respondent-facing extra CF questions visible but never
+ // call them confirmed defects: routing, cells, and QRE coverage may differ.
+ const actionableExtras=sourceExtra.filter(x=>x.qid && !x.missingRequested &&
+   !['Info'].includes(x.type) && respondentText(x).trim().split(/\s+/).length>=3);
+ const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,extras:sourceExtra.length,actionableExtras:actionableExtras.length};
+ return {rows:out,sourceExtra,actionableExtras,summary,created:new Date().toISOString()};
 }
 P.compare=compare;P.titleKey=titleKey;P.cleanOption=cleanOption;P.classify=classify;P.respondentText=respondentText;
 })(window.LazyProof=window.LazyProof||{});

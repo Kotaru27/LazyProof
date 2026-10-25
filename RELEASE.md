@@ -1,17 +1,25 @@
-# LazyProof v0.7 — Dynamic wording and unnumbered answer-list fixes
+# LazyProof v0.8 — comparison integrity
+
+This is a conservative accuracy update to v0.7. It preserves the upload workflow, manual selection of XML language, word-level green/red comparison, question mapping controls, and difference-only CSV.
 
 ## Corrections
 
-- QRE answer options written as plain Word paragraphs can now be classified when a question has an explicit SA/MA heading, a respondent-facing selection instruction, and a contiguous list of at least three plausible answers. The rule is not based on whether XML answer text matches; unexpected QRE options remain detectable.
-- A bare `Answers` heading is not an answer option. Trailing `[Open answer]` annotations on actual answer options are normalized, but a standalone `[Open answer]` placeholder is **not** silently accepted as a match.
-- Repeated QRE QIDs representing alternative text from one `^f('variable')^` field are checked against that variable's answer texts in the **selected XML language**. If all variants are identifiable, the corresponding CF question is mapped with individually labeled variants instead of a false duplicate warning.
-- Dynamic source matches remain **Needs review** because XML cannot prove the runtime category/route selection. A duplicated QID with unresolved variable sources continues to require manual review.
-- Avoid false duplicate-mapping warnings for two verified alternative QRE wordings pointing to the same dynamic CF question. All other ambiguous/multiple mappings retain safeguards.
+1. Numeric QID suffixes are no longer silently removed. Possible mappings that lack corroborating question titles require review.
+2. Choice questions with no verified options in either source no longer pass as matches.
+3. Two-option unnumbered Word answer lists are recognized when an explicit selection instruction and question-type label support them.
+4. Duplicate QRE answer labels are preserved instead of deduplicated.
+5. Respondent-facing "Please use..." instructions are not globally discarded as programming notes.
+6. A reused exact QID with conflicting titles is not considered automatically equivalent.
+7. Unpaired, likely respondent-facing CF nodes appear in a collapsed candidate-review area. They are not called confirmed missing QRE questions. Internal Info nodes and empty copy are excluded.
+8. Struck-through Word runs are excluded from active wording and trigger a review note. Fully struck paragraphs are accounted for.
+9. HTML image alt text survives XML text normalization; inline hidden duplicates are excluded.
+10. Alternative numeric QIDs (such as A1) and named q-prefixed IDs are recognized without study-specific QID names.
+11. Section identification uses Word heading styles and contextual numbered headings instead of named demo sections; metadata labels such as QUALITY are not interpreted as QIDs.
+12. Exact-QID identity conflicts and uncertain normalized-ID mappings are review cases rather than unsubstantiated definitive differences.
 
-## Preserved
+## Boundaries
 
-Manual language selection, source-file privacy, full wording comparison, red/green difference highlighting, report filtering, manual mapping and CSV export. No dependencies added; no broad style rewrite.
-
-## Limitations
-
-This does not execute Confirmit scripts or prove displayed text on every respondent path. Generic document layouts, routing, other complex expressions and unsupported question structures remain subject to manual review.
+- Text comparison uses only the user-selected XML language; runtime substitutions, routing, grid row mapping, and hidden node display cannot be exhaustively verified from a survey definition.
+- Unpaired CF candidates are **not** confirmed additional respondent questions; survey cells, reused templates, and routing can legitimately explain them.
+- The original questionnaire may contain struck-through text whose intended revision state requires manual signoff.
+- No new dependencies, external APIs, or study-specific QID overrides were added.

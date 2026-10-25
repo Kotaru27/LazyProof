@@ -1,21 +1,22 @@
-# LazyProof v0.7 verification
+# LazyProof v0.8 verification
 
-Executed in the cloud Chromium harness against privately supplied demo DOCX and XML/ZIP files. The private files are not included in the public repository or release ZIP.
+## Tested against
 
-## Actual demo, selected XML language 7
+- Two privately provided demo files: one Word QRE and one Confirmit survey definition ZIP. The source filenames and content are not shipped or published.
+- 16 targeted Node assertions in `tests/regression.cjs`, covering the original 12 issue families and four additional identity/heading/metadata guards.
+- Real-demo browser regression in cloud Chromium for both declared XML languages, with no JavaScript page errors and no outbound requests.
+- Additional browser security checks on HTML sanitization, actual synthetic DOCX strikethrough handling, alternative QIDs/headings, no horizontal overflow at 2560×1440 and 1366×768, and the collapsed CF-only review list.
+- Dynamic text variants and changed instructions from the prior v0.7 regression suite remain under test.
 
-- 48 parsed QRE entries; 45 mapped; 17 source matches; 6 potential differences; 25 review entries; 0 unmapped.
-- A multiple-choice QRE list written entirely as unnumbered Word paragraphs now provides 10 options and agrees with the 10 XML response definitions.
-- Two other unnumbered multiple-choice lists now provide 9 options each and agree with their XML response definitions.
-- Two QRE wording variants that share a QID are mapped to one dynamic XML CF question via a referenced variable's selected-language answer texts, each remaining marked as `Needs review` for runtime selection.
-- Six previously identified real differences remain detected; no newly introduced definite mismatch appeared in this demo.
+## Observed demo summary
 
-## Browser and negative tests
+| Selected XML ID | QRE parsed | Mapped | Source matches | Potential differences | Needs review | Unmapped |
+|---|---:|---:|---:|---:|---:|---:|
+| 7 | 48 | 45 | 15 | 5 | 27 | 1 |
+| 9 | 48 | 45 | 9 | 8 | 30 | 1 |
 
-- `test_v07_regression.py`: existing browser workflow, two selected languages, CSV export, QRE/XML instruction handling, word differences and no runtime errors/network requests — passed.
-- `test_v07_targets.py`: unnumbered lists, variant 1/2 review labels, exact dynamic-source associations, false-duplicate avoidance, wrong variant rejection, ordinary duplicate-QID safeguards, basic generic unnumbered list fixture and no runtime errors/network requests — passed.
-- `node --check` passed for modified JavaScript files.
+Language 7 moves one prior apparent difference to Needs review because the normalized QID alone does not confirm identity; another previously matched question requires review because strikethrough source text was detected. These are stricter classifications, not resolved survey defects. The report also exposes 89 unpaired CF respondent-text candidates for language 7 in a collapsed section, without claiming all 89 are errors.
 
-## Important boundaries
+## Test limits
 
-The test harness injects release HTML/CSS/JS into a cloud Chromium page because direct public-site browsing is restricted. Source comparison does **not** certify runtime piping, script execution, visual rendering or all Word document layouts. Automated checks can still miss discrepancies. GitHub Actions deployment evidence is tracked separately from browser behavior.
+Browser navigation to a local HTTP test server was blocked by the cloud environment's administrator policy. The exact static release HTML, CSS and JS were instead loaded into Chromium in memory; this proves client-side behavior but not that the public URL is reachable. Actual live public deployment requires GitHub Pages workflow verification separately. Exhaustive routing, visual respondent rendering, and arbitrary questionnaire formats are not certified.
