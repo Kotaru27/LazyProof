@@ -1,4 +1,4 @@
-# LazyProof — Survey Text QA (v0.3, findings-first prototype)
+# LazyProof — Survey Text QA (v0.4, XML-driven language selection)
 
 A static, browser-local comparison tool for Word `.docx` questionnaires and **Confirmit Survey Definition** `.xml` or `.zip` files. This is a new tool, not an alteration of Lazy Finder.
 
@@ -8,7 +8,7 @@ Extract this ZIP and open `index.html` in Chrome or Edge. No installation, admin
 
 1. Select the QRE `.docx`.
 2. Select the survey-definition `.xml` or a ZIP containing one XML.
-3. Choose XML language (German 9 by default) and click **Analyze study**.
+3. The survey language is detected automatically from `ProjectInfo/Languages` and the populated question text in the uploaded XML. Click **Analyze study**. If the XML declares multiple languages, select **Change** to choose another available XML language.
 4. Inspect only *Difference*, *Needs review*, or *Unmapped* findings; successfully matched items are omitted from the display.
 5. Optionally change uncertain mappings using the selector. **Export CSV** for Excel or record-keeping.
 
@@ -27,7 +27,7 @@ Extract this ZIP and open `index.html` in Chrome or Edge. No installation, admin
 - The Word parser recognizes QIDs written in supported naming formats. Unnumbered introductions, embedded images, complex tables, some grid rows, dynamic fields and unusual Word numbering may be missed. `QRE questions found` measures *recognized* questions, not a guarantee of whole-document coverage.
 - Exclusion rules are conservative, but programming notes may still appear among extracted options and require manual confirmation.
 - Exact title matching is allowed only when unique; matching by title is flagged for review. Actual XML `NodeLabel` availability depends on the export; not assumed.
-- Strict language mode: only the selected XML language is examined; unavailable selected-language fields are marked for review rather than borrowed from another locale. Ensure the QRE is in the matching language.
+- Strict language mode: only the automatically detected or explicitly selected XML language is examined; unavailable selected-language fields are marked for review rather than borrowed from another locale. Ensure the QRE is in the matching language.
 - Answer codes in the QRE are not always available from Word numbering; comparison is primarily by visible answer text, not verified QRE precodes.
 - Unknown XML schemas or ZIPs with multiple XML files are rejected. Imported files should be below the specified sizes (35 MB archive / 40 MB expanded XML).
 - XML and Word content are treated as untrusted data; no arbitrary XML scripts or HTML are executed. Exported CSV opens in spreadsheet programs; as with any untrusted CSV, validate its contents before passing to other systems.

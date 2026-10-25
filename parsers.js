@@ -159,13 +159,51 @@ function collectAnswers(root,language,listMap,depth=0){
  }
  return out;
 }
-function parseCF(document,requestedLang='9'){
+// The official ProjectInfo/Languages list is the authoritative list of project
+// languages. Numerous other Language attributes belong to embedded template and
+// resource translations and MUST NOT become UI choices.
+const LOCALE_NAMES={'9':'German','7':'Default','12':'English','1043':'Dutch','1025':'Arabic'};
+function surveyLanguageInfo(document){
+ const root=document.documentElement;
+ if(root.localName!=='Project')throw Error('Expected Confirmit Project XML. This does not look like a survey definition.');
+ const proj=direct(root,'ProjectInfo'),questionnaire=direct(root,'Questionnaire');
+ const routing=direct(direct(questionnaire,'Routing'),'Nodes');
+ if(!routing)throw Error('Could not find Questionnaire > Routing > Nodes. Check the export type.');
+ const stated=children(direct(proj,'Languages'),'Language').map(txt).filter(x=>/^\d+$/.test(x));
+ const weights=new Map();
+ // Read question-level translations only. Other XML sections may have hundreds
+ // of unused template locale IDs, so never use them to advertise languages.
+ for(const ft of descendants(routing,'FormText')){
+  const id=ft.getAttribute('Language');
+  if(!id || !/^\d+$/.test(id))continue;
+  const text=txt(direct(ft,'Text')),instruction=txt(direct(ft,'Instruction'));
+  if(text || instruction)weights.set(id,(weights.get(id)||0)+(text?2:1));
+ }
+ const languages=[...new Set(stated.length?stated:[...weights.keys()])];
+ if(!languages.length)throw Error('No survey languages could be identified from this XML.');
+ const projectDefault=proj?.getAttribute('DefaultLanguage')||'';
+ // Explicit default languages may be template defaults rather than the most
+ // populated survey language. Prefer real question-text coverage, then default.
+ const detected=languages.reduce((best,id)=>{
+  const weight=weights.get(id)||0,previous=weights.get(best)||0;
+  if(weight>previous)return id;
+  if(weight===previous && id===projectDefault)return id;
+  return best;
+ },languages[0]);
+ const ordered=[detected,...languages.filter(x=>x!==detected)];
+ return {languages:ordered.map(id=>({id,name:LOCALE_NAMES[id]||`Language ${id}`,label:`${LOCALE_NAMES[id]||'Language'} · ${id}`,questionTextWeight:weights.get(id)||0})),detectedLanguage:detected,projectDefaultLanguage:projectDefault};
+}
+function parseCF(document,requestedLang='auto'){
  const root=document.documentElement;
  if(root.localName!=='Project')throw Error('Expected Confirmit Project XML. This does not look like a survey definition.');
  const proj=direct(root,'ProjectInfo');const questionnaire=direct(root,'Questionnaire');
  const routing=direct(direct(questionnaire,'Routing'),'Nodes');
  if(!routing)throw Error('Could not find Questionnaire > Routing > Nodes. Check the export type.');
- const defaultLanguage=proj?.getAttribute('DefaultLanguage')||'7';
+ const profile=surveyLanguageInfo(document);
+ const language=(requestedLang==null||requestedLang==='auto')?profile.detectedLanguage:String(requestedLang);
+ // Fail closed rather than silently comparing an XML locale not supported by this survey.
+ if(!profile.languages.some(x=>x.id===language))throw Error(`Language ${language} is not listed in this survey definition.`);
+ const defaultLanguage=profile.projectDefaultLanguage;
  const predefined=direct(direct(questionnaire,'PredefinedLists'),'Nodes');const listMap=new Map();
  if(predefined)for(const node of Array.from(predefined.children)){if(node.localName==='PredefinedList'){
  const id=node.getAttribute('EntityId');
@@ -176,11 +214,11 @@ function parseCF(document,requestedLang='9'){
   for(const ch of Array.from(node.children)){
    if(CHILD_TYPES.has(ch.localName)){
     const name=txt(direct(ch,'Name'));
-    const field=getFormTexts(ch,requestedLang);
+    const field=getFormTexts(ch,language);
     const category=ch.getAttribute('QuestionCategory')||'';
     const hidden=['Hidden','Background','Panel'].includes(ch.getAttribute('VariableType'))||category.toLowerCase().includes('exclude');
     const answerRoots=Array.from(ch.children).filter(e=>['SingleAnswers','MultiAnswers','OpenAnswers','GridAnswers','Scales','Answers'].includes(e.localName));
-    const options=answerRoots.flatMap(e=>collectAnswers(e,requestedLang,listMap));
+    const options=answerRoots.flatMap(e=>collectAnswers(e,language,listMap));
     const p={qid:name,entityId:ch.getAttribute('EntityId')||'',type:ch.localName,title:field.title,text:field.text,instruction:field.instruction,options,language:field.language,missingRequested:field.missingRequested,hidden,path:blockPath.join(' / '),source:'cf'};
     if(!name && !field.text && !field.title)continue;
     questions.push(p);types[ch.localName]=(types[ch.localName]||0)+1;
@@ -193,9 +231,11 @@ function parseCF(document,requestedLang='9'){
   }
  }
  visit(routing);
- return {questions,project:proj?.getAttribute('Name')||'',projectId:proj?.getAttribute('ProjectId')||'',defaultLanguage,selectedLanguage:requestedLang,types,unresolvedRefs:unresolved,duplicates:[...duplicates.entries()].filter(([k,v])=>v.length>1).map(([k,v])=>k),totalLists:listMap.size};
+ return {questions,project:proj?.getAttribute('Name')||'',projectId:proj?.getAttribute('ProjectId')||'',defaultLanguage,selectedLanguage:language,availableLanguages:profile.languages,detectedLanguage:profile.detectedLanguage,types,unresolvedRefs:unresolved,duplicates:[...duplicates.entries()].filter(([k,v])=>v.length>1).map(([k,v])=>k),totalLists:listMap.size};
 }
-async function parseSurvey(file,language='9'){
+let cachedSurvey=null;
+async function loadSurveyDocument(file){
+ if(cachedSurvey?.file===file)return cachedSurvey.document;
  let xml;
  if(file.name.toLowerCase().endsWith('.xml')){if(file.size>MAX_XML)throw Error('XML exceeds the 40 MB limit.');xml=await file.text();}
  else if(file.name.toLowerCase().endsWith('.zip')){
@@ -205,7 +245,13 @@ async function parseSurvey(file,language='9'){
   if(paths.length>1)throw Error('ZIP contains multiple XML files. Export a single survey definition XML.');
   xml=await readZipEntry(zip.file(paths[0]));
  }else throw Error('Please select a Confirmit .xml or .zip survey definition.');
- return parseCF(parseXML(xml),language);
+ const document=parseXML(xml);
+ cachedSurvey={file,document};
+ return document;
 }
-P.parseQRE=parseQRE;P.parseSurvey=parseSurvey;P.parseCF=parseCF;P.splitQre=splitQre;P.normalize=norm;P.canonicalId=canonicalId;P.stripMarkup=stripMarkup;P.parseXML=parseXML;
+async function inspectSurveyLanguages(file){return surveyLanguageInfo(await loadSurveyDocument(file));}
+async function parseSurvey(file,language='auto'){
+ return parseCF(await loadSurveyDocument(file),language);
+}
+P.parseQRE=parseQRE;P.parseSurvey=parseSurvey;P.inspectSurveyLanguages=inspectSurveyLanguages;P.surveyLanguageInfo=surveyLanguageInfo;P.parseCF=parseCF;P.splitQre=splitQre;P.normalize=norm;P.canonicalId=canonicalId;P.stripMarkup=stripMarkup;P.parseXML=parseXML;
 })(window.LazyProof=window.LazyProof||{});

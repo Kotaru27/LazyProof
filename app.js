@@ -1,18 +1,49 @@
 (function(P){'use strict';
 const $=id=>document.getElementById(id);
-let qFile=null,xFile=null,qre=null,cf=null,result=null,manual={},chosen=null,visibleLimit=70;
+let qFile=null,xFile=null,qre=null,cf=null,result=null,manual={},chosen=null,visibleLimit=70,languageReady=false,languageScan=0,languageInfo=null;
 const labels={mismatch:'Difference',review:'Review',unmapped:'Unmapped'};
-const languageNames={'9':'German','7':'Default (7)','12':'English','1043':'Dutch','1025':'Arabic'};
+function refreshAnalyze(){ $('analyze').disabled=!(qFile&&xFile&&languageReady); }
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function setInput(type,file){
  if(!file)return;
  const isQ=type==='qre'; const allowed=isQ?/\.docx$/i:/\.(xml|zip)$/i;
  if(!allowed.test(file.name)){showError(`Unsupported ${type.toUpperCase()} format. ${isQ?'Select .docx':'Select .xml or .zip'}.`);return;}
  if(file.size>35*1024*1024){showError('Files must be smaller than 35 MB.');return;}
- if(isQ)qFile=file;else xFile=file;
+ if(isQ)qFile=file;else {xFile=file;languageReady=false;languageInfo=null;$('language-block').hidden=true;} 
  $(type+'-status').textContent=file.name;
  $(type+'-size').textContent=(file.size/1024/1024).toFixed(2)+' MB';
- $(type+'-drop').classList.add('has-file');$('analyze').disabled=!(qFile&&xFile);$('error').hidden=true;
+ $(type+'-drop').classList.add('has-file');refreshAnalyze();$('error').hidden=true;
+ if(!isQ)loadAvailableLanguages(file);
+}
+async function loadAvailableLanguages(file){
+ const scan=++languageScan;
+ $('xml-status').textContent='Reading survey languages…';
+ try{
+  const profile=await P.inspectSurveyLanguages(file);
+  if(scan!==languageScan||xFile!==file)return; // Discard stale upload results.
+  languageInfo=profile;
+  const picker=$('language'),options=profile.languages;
+  picker.replaceChildren();
+  for(const locale of options){const option=document.createElement('option');option.value=locale.id;option.textContent=locale.label;picker.appendChild(option);}
+  picker.value=profile.detectedLanguage;
+  $('language-block').hidden=false;
+  $('language-change').hidden=options.length<2;
+  $('language-picker').hidden=true;
+  $('language-change').setAttribute('aria-expanded','false');
+  $('language-hint').textContent=options.length>1?'Detected from this XML. Change only if the QRE uses another listed language.':'Only one language is declared in this XML.';
+  updateLanguageReadout();
+  languageReady=true;
+  $('xml-status').textContent=file.name;
+  refreshAnalyze();
+ }catch(e){
+  if(scan!==languageScan||xFile!==file)return;
+  languageReady=false;refreshAnalyze();$('language-block').hidden=true;
+  $('xml-status').textContent='Could not read survey XML';showError(e.message||String(e));
+ }
+}
+function updateLanguageReadout(){
+ const current=languageInfo?.languages.find(l=>l.id===$('language').value);
+ $('language-readout').textContent=current?`${current.name} (${current.id})${current.id===languageInfo.detectedLanguage?' · auto-detected':''}`:'No XML language detected';
 }
 function setupDrop(type){
  const d=$(type+'-drop');const input=$(type+'-file');
@@ -33,12 +64,12 @@ async function run(){
   manual={};result=P.compare(qre,cf,manual);chosen=null;visibleLimit=70;
   $('setup').hidden=true;$('results').hidden=false;renderResults();window.scrollTo({top:0,behavior:'instant'});
  }catch(e){showError(e.message||String(e));console.error(e);}
- finally{btn.disabled=!(qFile&&xFile);btn.innerHTML='Analyze study <span aria-hidden="true">↗</span>';}
+ finally{refreshAnalyze();btn.innerHTML='Analyze study <span aria-hidden="true">↗</span>';}
 }
 function rerun(){const key=chosen;result=P.compare(qre,cf,manual);renderResults(key);}
 function renderResults(selected=chosen){
  const s=result.summary;
- $('project-name').textContent=(cf.project||cf.projectId||'Confirmit survey')+' · '+(languageNames[cf.selectedLanguage]||'Language '+cf.selectedLanguage)+' only';
+ $('project-name').textContent=(cf.project||cf.projectId||'Confirmit survey')+' · '+(cf.availableLanguages.find(l=>l.id===cf.selectedLanguage)?.name||'Language '+cf.selectedLanguage)+' only';
  $('stat-qre').textContent=s.qre;$('stat-mismatch').textContent=s.mismatches;$('stat-review').textContent=s.review;$('stat-unmapped').textContent=s.unmapped;
  $('coverage-note').textContent=`${s.mapped} of ${s.qre} questions mapped · Only XML language ${cf.selectedLanguage} compared · ${s.matches} exact matches hidden`; 
  chosen=selected;refreshVisible();
@@ -109,10 +140,10 @@ function downloadCSV(){if(!result)return;
  const csv='\uFEFF'+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lazyproof-survey-qa-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
-setupDrop('qre');setupDrop('xml');$('analyze').addEventListener('click',run);
+setupDrop('qre');setupDrop('xml');$('language-change').addEventListener('click',()=>{const p=$('language-picker');p.hidden=!p.hidden;$('language-change').setAttribute('aria-expanded',String(!p.hidden));if(!p.hidden)$('language').focus();});$('language').addEventListener('change',updateLanguageReadout);$('analyze').addEventListener('click',run);
 $('change-files').addEventListener('click',()=>{$('results').hidden=true;$('setup').hidden=false;$('error').hidden=true;window.scrollTo(0,0);});
 $('export-csv').addEventListener('click',downloadCSV);
 $('search').addEventListener('input',()=>{visibleLimit=70;refreshVisible();});$('status-filter').addEventListener('change',()=>{visibleLimit=70;refreshVisible();});
 $('load-more').addEventListener('click',()=>{visibleLimit+=70;renderList();});
-window.LazyProofApp={testLoad:async(q,x,lang='9')=>{qre=await P.parseQRE(q);cf=await P.parseSurvey(x,lang);manual={};result=P.compare(qre,cf);renderResults();return {qre,cf,result};},getState:()=>({qre,cf,result})};
+window.LazyProofApp={testLoad:async(q,x,lang='auto')=>{qre=await P.parseQRE(q);cf=await P.parseSurvey(x,lang);manual={};result=P.compare(qre,cf);renderResults();return {qre,cf,result};},getState:()=>({qre,cf,result})};
 })(window.LazyProof=window.LazyProof||{});

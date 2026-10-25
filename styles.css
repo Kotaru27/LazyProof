@@ -80,3 +80,15 @@
 
 .language-hint{max-width:280px;color:#77897e;font-size:11px;line-height:1.5}
 @media(max-width:700px){.language-hint{max-width:none}}
+
+/* v0.4: XML-derived language, condensed selection */
+.detected-locale{min-width:248px;max-width:380px;flex:1 1 250px}
+.locale-summary{display:flex;align-items:center;gap:14px;justify-content:space-between}
+.locale-summary>div{display:flex;flex-direction:column;gap:3px}
+.locale-kicker{font-size:11px;font-weight:700;color:#73867a}
+.locale-summary strong{font-size:14px;font-weight:650;color:#2b523d}
+.locale-change{padding:5px 9px;border:1px solid var(--hair);border-radius:6px;background:#fff;color:#416950;font-size:11px}
+.locale-help{font-size:11px;color:#809086;margin:5px 0 0;line-height:1.45}
+.locale-picker{padding-top:10px;max-width:310px}
+.locale-picker label{font-size:11px;color:#597365;display:block;margin-bottom:5px}
+.locale-picker select{min-width:180px;max-width:100%;height:37px;background:#fff;border:1px solid var(--hair);border-radius:7px;color:#2f513e;padding:0 10px}

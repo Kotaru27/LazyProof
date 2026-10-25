@@ -31,8 +31,11 @@
   </label>
  </div>
  <div class="setup-actions">
-  <label class="field-label" for="language">Compare language <select id="language" aria-label="XML language"><option value="9">German · 9</option><option value="7">Default · 7</option><option value="12">English · 12</option><option value="1043">Dutch · 1043</option><option value="1025">Arabic · 1025</option></select></label>
-  <span class="language-hint">Compare against a QRE written in the same language. Missing XML translations are flagged for review.</span>
+  <div class="detected-locale" id="language-block" hidden>
+   <div class="locale-summary"><div><span class="locale-kicker">Survey language</span><strong id="language-readout">Detecting from XML…</strong></div><button type="button" id="language-change" class="locale-change" hidden aria-expanded="false" aria-controls="language-picker">Change</button></div>
+   <div id="language-picker" class="locale-picker" hidden><label for="language">Choose a language defined in this XML</label><select id="language" aria-label="Survey language from uploaded XML"></select></div>
+   <p class="locale-help" id="language-hint">Detected from uploaded XML. Compare with a QRE in this language.</p>
+  </div>
   <button class="primary-btn" id="analyze" disabled>Analyze study <span aria-hidden="true">↗</span></button>
  </div>
  <div id="error" class="error-box" role="alert" hidden></div>

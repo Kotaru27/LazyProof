@@ -1,22 +1,19 @@
-# LazyProof v0.3 — verification evidence
+# LazyProof v0.4 verification (2026-10-25)
 
-## Changes
-- Use only the selected XML language ID for question Title/Text/Instruction and answer text. No language fallback in the comparison parser. Missing requested-language entries stay unresolved/review, not confirmed wording mismatches.
-- Display complete QRE and CF question texts for wording differences. Unchanged words appear green, changed words red. Literal ellipses present in the input XML remain literal content; LazyProof does not insert ellipses to truncate excerpts.
-- Use a compact results workspace; unmatched and review findings remain visible, matched rows remain hidden. Technical notes and manual mapping are collapsed until opened.
-- Export complete QRE and CF texts for wording discrepancies in CSV; otherwise no full question in a review-only row. Include XML language in CSV.
+Scope: only XML-derived language options and selection UI. Parsing, matching, text comparison, and CSV behavior are unchanged except for rejecting unsupported locale requests.
 
-## Verified locally in browser
-Cloud-hosted headless Chromium via Playwright and the real demo QRE + ZIP:
-- QRE 48 recognized, XML 317 nodes, 43 mapped; 8 match, 14 mismatch, 26 review. 40 reported findings, all nonmatching. These counts are source-heuristic estimates, not validated survey defects.
-- QRE `cq1200_x` and CF `cq1200`: full text on both sides, distinct red changed words and green identical words. CF contains an actual typographic ellipsis character in the exported question definition; it is retained as data.
-- All returned question and option `language` fields are either the selected language ID or empty; no cross-language results.
-- Synthetic three-language XML probe: when `9` missing, no fallback from `7` or `12`, and result classified `review`; selecting `12` or `7` returns precisely those strings.
-- Switching to XML language `12` works, 158 of the XML question nodes have no selected-language FormText; these are kept as missing/review, never filled using another language.
-- Full-text comparison with 500+ tokens preserved both sides, with bounded complexity path.
-- CSV exported 40 findings, all nonmatching, selected language 9, full wording for changed texts.
-- No runtime page errors or network requests in this browser test.
+## Source evidence
 
-Not verified: live respondent rendering, true runtime language fallback (intentionally not assumed), exhaustive grid/routing comparisons, respondent-level outputs, or real-user acceptance.
+- Demo XML `p474943337087.zip`: `ProjectInfo/Languages` lists **9** and **7**. `ProjectInfo DefaultLanguage=7`; routed question text in language 9 is more populated than in language 7. Auto detection uses the higher populated count from the **active routing question content**, rather than blindly using a template default.
+- Other language attributes, e.g. 12 and 1043, occur in resource/template content and do not qualify as project languages.
 
-Test script (requires Playwright in QA environment): `tests-v03.py` with the demo files in the specified test location. No client-side installation required to use the application.
+## Executed checks
+
+- `node --check app.js`, `node --check parsers.js`: syntax passed.
+- `python test-v04.py`: Chromium test PASS — no preselected menu before file, German (9) selected by uploaded XML, selectable options exactly [9, 7], 48 QRE questions compared, 40 discrepancy/review CSV rows and selected locale 9, change to 7 preserved; synthetic XML with only 12 auto-selects English (12) and hides Change; resource-only languages hidden; malformed XML blocks Analyze; no uncaught browser errors.
+- `python test-v04-regression.py`: existing full-text word-highlight, CSV, language isolation and strict missing selected-language tests PASS after updating the fixtures to declare their available languages; selected 7 only returns 7 when specified; no page script errors or external network requests recorded.
+
+## Important boundary
+
+- Auto locale determination is a deterministic heuristic when multiple project languages are explicitly listed. A translated study where the default language is 7 but most routed question text is 9 will select 9. Users may switch languages only to those listed in XML. A QRE in another language still requires manual selection or a matching QRE.
+- This does not prove comparison accuracy across all possible XML survey schema variants or live rendering.
