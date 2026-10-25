@@ -59,7 +59,7 @@ async function run(){
   qre=await P.parseQRE(qFile);cf=await P.parseSurvey(xFile,$('language').value);
   if(!qre.questions.length)throw Error('No recognizable QIDs were extracted from this Word QRE. Review document layout before using results.');
   if(!cf.questions.length)throw Error('No questions were found in the Confirmit routing tree.');
-  manual={};result=P.compare(qre,cf,manual);chosen=null;visibleLimit=70;$('status-filter').value='mismatch';$('search').value='';
+  manual={};result=P.compare(qre,cf,manual);chosen=null;visibleLimit=70;$('status-filter').value='changes';$('search').value='';
   $('setup').hidden=true;$('results').hidden=false;renderResults();window.scrollTo({top:0,behavior:'instant'});
  }catch(e){showError(e.message||String(e));console.error(e);}
  finally{refreshAnalyze();btn.innerHTML='Compare files <span aria-hidden="true">↗</span>';}
@@ -68,8 +68,8 @@ function rerun(){const key=chosen;result=P.compare(qre,cf,manual);renderResults(
 function renderResults(selected=chosen){
  const s=result.summary;
  $('project-name').textContent=(cf.project||cf.projectId||'Confirmit survey')+' · '+(cf.availableLanguages.find(l=>l.id===cf.selectedLanguage)?.name||'Language '+cf.selectedLanguage)+' only';
- $('stat-qre').textContent=s.qre;$('stat-mismatch').textContent=s.mismatches;$('stat-review').textContent=s.review;$('stat-unmapped').textContent=s.unmapped;
- $('coverage-note').textContent=`${s.mapped}/${s.qre} mapped · XML language ${cf.selectedLanguage} · ${s.matches} matches hidden`; 
+ $('stat-qre').textContent=s.qre;$('stat-mismatch').textContent=s.observedChanges;$('stat-review').textContent=s.reviewOnly;$('stat-unmapped').textContent=s.unmapped;
+ $('coverage-note').textContent=`${s.mapped}/${s.qre} mapped · XML language ${cf.selectedLanguage} · ${s.mismatches} direct-pair source change(s) · ${s.changesNeedMapping} source change(s) need mapping confirmation · ${s.matches} matches hidden`; 
  renderAdditionalCF();chosen=selected;refreshVisible();
 }
 function renderAdditionalCF(){
@@ -85,19 +85,20 @@ function renderAdditionalCF(){
  }
  if(extra.length>150){const t=document.createElement('p');t.textContent=(extra.length-150)+' more unpaired CF candidates are not displayed.';host.append(t);}
 }
-function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||r.verdict===filter)&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,P.respondentText(r.cf)].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
+function filteredRows(){const filter=$('status-filter').value;const q=$('search').value.trim().toLocaleLowerCase();return result.rows.filter(r=>r.verdict!=='match'&&(filter==='all'||(filter==='changes'&&r.evidence.hasChange)||(filter==='review'&&r.verdict==='review'&&!r.evidence.hasChange)||(filter==='unmapped'&&r.verdict==='unmapped'))&&(!q||[r.q.qid,r.q.title,r.q.text,r.cf?.qid,r.cf?.title,P.respondentText(r.cf)].some(x=>(x||'').toLocaleLowerCase().includes(q))));}
 function refreshVisible(){const rows=filteredRows();if(!rows.some(r=>r.key===chosen))chosen=rows[0]?.key||null;renderList();renderDetail();}
-function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(types.includes('text'))return 'Question wording changed';if(types.includes('dynamic-source'))return `Variable text · QRE variant ${r.variantNumber||1}/${r.variantTotal||1}`;if(types.includes('dynamic-text'))return 'Variable wording needs review';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
+function shortFinding(r){const types=r.issues.filter(i=>i.level!=='info').map(i=>i.type);if(r.evidence?.hasChange)return `${r.evidence.text==='different'?'Wording': 'Answer options'} changed${r.evidence.changeIsProvisional?' · confirm question pairing':''}`;if(types.includes('text'))return 'Question wording changed';if(types.includes('dynamic-source'))return `Variable text · QRE variant ${r.variantNumber||1}/${r.variantTotal||1}`;if(types.includes('dynamic-text'))return 'Variable wording needs review';if(types.includes('answers'))return 'Answer options differ';if(types.includes('empty-text')||types.includes('locale'))return 'Selected-language text unavailable';if(types.includes('answer-locale'))return 'Answer translation incomplete';if(types.includes('grid-row')||types.includes('grid'))return 'Grid needs manual review';if(types.includes('missing-map'))return 'No confirmed XML match';return r.issues.find(i=>i.level!=='info')?.message||'Needs inspection';}
 function renderList(){
  const rows=filteredRows();$('visible-count').textContent=`${rows.length} items`;
  const holder=$('question-list');holder.replaceChildren();
  for(const r of rows.slice(0,visibleLimit)){
   const b=document.createElement('button');b.type='button';b.className='question-row'+(r.key===chosen?' selected':'');
   b.setAttribute('aria-selected',String(r.key===chosen));
-  b.innerHTML=`<div class="question-titleline"><strong>${escape(r.q.qid)}${r.variantTotal?' · '+r.variantNumber+'/'+r.variantTotal:''}</strong><span class="status ${r.verdict}">${labels[r.verdict]}</span></div><div class="question-short">${escape(shortFinding(r))}</div><div class="question-meta">${escape(r.q.title||'Question')} <span>· ${escape(r.cf?.qid||'Not mapped')}</span></div>`;
+  const label=r.evidence.hasChange?(r.evidence.changeIsProvisional?'Change · pairing?':'Change'):labels[r.verdict];
+  b.innerHTML=`<div class="question-titleline"><strong>${escape(r.q.qid)}${r.variantTotal?' · '+r.variantNumber+'/'+r.variantTotal:''}</strong><span class="status ${r.evidence.hasChange?'mismatch':r.verdict}">${escape(label)}</span></div><div class="question-short">${escape(shortFinding(r))}</div><div class="question-meta">${escape(r.q.title||'Question')} <span>· ${escape(r.cf?.qid||'Not mapped')}</span></div>`;
   b.addEventListener('click',()=>{chosen=r.key;refreshVisible();});holder.append(b);
  }
- if(!rows.length){const p=document.createElement('div');p.className='notfound';p.textContent=$('status-filter').value==='mismatch'?'No wording or answer differences found in this view. Check “Needs review” for unresolved comparisons.':'No findings for this filter.';holder.append(p);}
+ if(!rows.length){const p=document.createElement('div');p.className='notfound';p.textContent=$('status-filter').value==='changes'?'No independently observed text or answer changes. Other checks may still need review.':'No findings for this filter.';holder.append(p);}
  $('load-more').hidden=rows.length<=visibleLimit;
 }
 function fullDiffHtml(parts){
@@ -151,8 +152,11 @@ function renderDetail(){
  if(!r){host.innerHTML='<div class="detail-empty"><h3>No finding selected</h3><p>Choose a different filter to review other items.</p></div>';return;}
  const c=r.cf,q=r.q;
  const issues=r.issues.filter(x=>x.level!=='info');
- const textIssue=issues.some(x=>x.type==='text'||x.type==='empty-text'||x.type==='dynamic-text');
- let html=`<div class="detail-head"><div><h3>${escape(q.qid)}${r.variantTotal?' · variant '+r.variantNumber+'/'+r.variantTotal:''}</h3><div class="detail-subtitle">${escape(q.title||'Question')} ${c?`· CF ${escape(c.qid)}`:''}</div></div><span class="status large ${r.verdict}">${labels[r.verdict]}</span></div>`;
+ const textIssue=r.evidence.text==='different'||issues.some(x=>x.type==='empty-text'||x.type==='dynamic-text');
+ const topLabel=r.evidence.hasChange?(r.evidence.changeIsProvisional?'Observed change · pairing unconfirmed':'Observed change'):labels[r.verdict];
+ let html=`<div class="detail-head"><div><h3>${escape(q.qid)}${r.variantTotal?' · variant '+r.variantNumber+'/'+r.variantTotal:''}</h3><div class="detail-subtitle">${escape(q.title||'Question')} ${c?`· CF ${escape(c.qid)}`:''}</div></div><span class="status large ${r.evidence.hasChange?'mismatch':r.verdict}">${escape(topLabel)}</span></div>`;
+ if(r.evidence.changeIsProvisional)html+='<p class="mapping-caution"><strong>Question pairing is not confirmed.</strong> The two source texts differ, but this is not a verified survey defect until their QIDs/titles are reconciled.</p>';
+ else if(r.verdict==='review'&&!r.evidence.hasChange)html+=`<p class="review-reason">${escape(r.evidence.reviewGroup)} · Text: ${escape(r.evidence.text.replaceAll('-', ' '))} · Answers: ${escape(r.evidence.answers.replaceAll('-', ' '))}</p>`;
  if(textIssue&&c&&!c.missingRequested)html+=textDiffSection(q,c);
  html+=answerDiffSection(r);
  // A review without text deltas must explain the actual limitation upfront.
@@ -161,7 +165,7 @@ function renderDetail(){
   if(primary)html+=`<p class="inline-finding"><strong>${escape(shortFinding(r))}</strong><span>${escape(primary.message)}</span></p>`;
  }
  const remaining=issues.filter(i=>!(i.type==='text'||i.type==='answers'||i.type==='empty-text'||i.type==='dynamic-text'));
- if(remaining.length>1||(remaining.length===1&&(textIssue||issues.some(x=>x.type==='answers')))){
+ if(remaining.length>0){
   html+=`<details class="findings-expand"><summary>Other verification notes <span>${remaining.length}</span></summary><div class="findings-body">`;
   for(const issue of remaining)html+=`<div class="notice ${escape(issue.level)}">${escape(issue.message)}</div>`;
   html+='</div></details>';
@@ -174,12 +178,12 @@ function renderDetail(){
 }
 function csvCell(v){let s=String(v??'').replace(/\r?\n/g,' ');if(/^[\s]*[=+@\-\t]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
 function downloadCSV(){if(!result)return;
- const head=['QRE QID','QRE title','CF QID','CF title','Status','XML language','Mapping method','Complete QRE question','Complete CF question','QRE options not matched in CF','CF options not matched in QRE','Findings'];
+ const head=['QRE QID','QRE title','CF QID','CF title','Status','Observed text','Observed answers','Mapping confidence','Review category','XML language','Mapping method','Complete QRE question','Complete CF question','QRE options not matched in CF','CF options not matched in QRE','Findings'];
  const rows=result.rows.filter(r=>r.verdict!=='match').map(r=>{
-  const hasTextIssue=r.issues.some(i=>i.type==='text'||i.type==='empty-text'||i.type==='dynamic-text');
+  const hasTextIssue=r.evidence.text==='different'||r.issues.some(i=>i.type==='empty-text'||i.type==='dynamic-text');
   const showText=hasTextIssue&&r.cf&&!r.cf.missingRequested;
   const a=r.issues.find(i=>i.type==='answers');
-  return [r.q.qid,r.q.title,r.cf?.qid||'',r.cf?.title||'',r.verdict,cf.selectedLanguage,r.reason,showText?r.q.text:'',showText?P.respondentText(r.cf):'',(a?.missing||[]).join(' | '),(a?.extra||[]).join(' | '),r.issues.filter(i=>i.level!=='info').map(i=>i.type+': '+i.message).join(' | ')];
+  return [r.q.qid,r.q.title,r.cf?.qid||'',r.cf?.title||'',r.verdict,r.evidence.text,r.evidence.answers,r.evidence.mapping,r.evidence.reviewGroup,cf.selectedLanguage,r.reason,showText?r.q.text:'',showText?P.respondentText(r.cf):'',(a?.missing||[]).join(' | '),(a?.extra||[]).join(' | '),r.issues.filter(i=>i.level!=='info').map(i=>i.type+': '+i.message).join(' | ')];
  });
  const csv='\uFEFF'+[head,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lazyproof-survey-qa-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);

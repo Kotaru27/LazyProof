@@ -1,22 +1,28 @@
-# LazyProof v0.8 verification
+# LazyProof v0.9 verification
 
-## Tested against
+## Source and test environment
 
-- Two privately provided demo files: one Word QRE and one Confirmit survey definition ZIP. The source filenames and content are not shipped or published.
-- 16 targeted Node assertions in `tests/regression.cjs`, covering the original 12 issue families and four additional identity/heading/metadata guards.
-- Real-demo browser regression in cloud Chromium for both declared XML languages, with no JavaScript page errors and no outbound requests.
-- Additional browser security checks on HTML sanitization, actual synthetic DOCX strikethrough handling, alternative QIDs/headings, no horizontal overflow at 2560×1440 and 1366×768, and the collapsed CF-only review list.
-- Dynamic text variants and changed instructions from the prior v0.7 regression suite remain under test.
+- Based on public `Kotaru27/LazyProof` v0.8, commit `486bca4015b81b846ad2cf3a6575d1fdd9c39514`.
+- Tested locally in the cloud workspace against privately supplied demo Word QRE and Confirmit XML ZIP. Those inputs are **not published**.
+- Chromium tests load the exact static app assets in-memory because the cloud test environment restricts local HTTP navigation; this does not establish public URL accessibility.
 
-## Observed demo summary
+## Tests executed and passed
 
-| Selected XML ID | QRE parsed | Mapped | Source matches | Potential differences | Needs review | Unmapped |
-|---|---:|---:|---:|---:|---:|---:|
-| 7 | 48 | 45 | 15 | 5 | 27 | 1 |
-| 9 | 48 | 45 | 9 | 8 | 30 | 1 |
+- Existing Node regression suite: **16/16** scenarios.
+- New independent-evidence Node suite: **21/21** scenarios (identity, content/answers, dynamic, grid, selected language missing, duplicate answers, manual mapping, safe title corroboration).
+- Cloud Chromium demo end-to-end in language IDs **7 and 9**: import, user-selected language, observed-change/review filters, provisional mapping details, full word highlighting, export, XSS-safe rendering, and language isolation.
+- Cloud Chromium security/Word tests: HTML sanitization, actual synthetic DOCX struck-through text, QID parsing, additional CF candidates, 2560×1440 and 1366×768 without horizontal overflow.
+- **Zero** page JavaScript errors and **zero** unexpected outbound requests observed in those browser runs.
 
-Language 7 moves one prior apparent difference to Needs review because the normalized QID alone does not confirm identity; another previously matched question requires review because strikethrough source text was detected. These are stricter classifications, not resolved survey defects. The report also exposes 89 unpaired CF respondent-text candidates for language 7 in a collapsed section, without claiming all 89 are errors.
+## Demo summary
 
-## Test limits
+| XML language ID | QRE entries | Exact source matches | Original mismatch verdicts | Review verdicts | Unmapped | Observed source changes | Other reviews |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 48 | 16 | 5 | 26 | 1 | 6 | 25 |
+| 9 | 48 | 10 | 8 | 29 | 1 | 9 | 28 |
 
-Browser navigation to a local HTTP test server was blocked by the cloud environment's administrator policy. The exact static release HTML, CSS and JS were instead loaded into Chromium in memory; this proves client-side behavior but not that the public URL is reachable. Actual live public deployment requires GitHub Pages workflow verification separately. Exhaustive routing, visual respondent rendering, and arbitrary questionnaire formats are not certified.
+A source change can overlap a review verdict, but the *display filters* partition changes vs other reviews so the interface doesn't duplicate items. The CSV preserves review verdicts alongside evidence fields.
+
+## Untested limits
+
+No live Confirmit runtime navigation, exhaustive piping/routing evaluation, independent sample-study accuracy benchmark, or public-site-browser smoke test was performed in these local runs. GitHub Actions deployment must be checked independently on publication.

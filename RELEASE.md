@@ -1,25 +1,19 @@
-# LazyProof v0.8 — comparison integrity
+# LazyProof v0.9 — source evidence and mapping confidence
 
-This is a conservative accuracy update to v0.7. It preserves the upload workflow, manual selection of XML language, word-level green/red comparison, question mapping controls, and difference-only CSV.
+Compared to v0.8:
 
-## Corrections
+- Keeps all verified source wording/answer differences visible, **even if question identity is not yet confirmed**. Such results are labeled as provisional pairing issues instead of being treated as confirmed survey defects.
+- Records independent evidence states for **text**, **answer labels**, and **mapping**, without treating missing translations or dynamic expressions as definite differences.
+- Splits the default results into non-overlapping **Observed changes**, **Other reviews**, and **Unmapped**. Exact source matches remain hidden. Mapping warnings remain accessible for changes.
+- Improves the CSV with evidence and mapping columns. Complete QRE and CF text, including separate CF instructions, remain available for identified text changes.
+- Resolves one reproducible stale-heading review only when a unique exact QID is corroborated by sufficiently distinctive identical question text and three or more identical options. No study-specific QID overrides.
+- Retains the v0.8 Word/XML parsers, browser-side processing, manual language selection, and existing style hierarchy. No new runtime dependency.
 
-1. Numeric QID suffixes are no longer silently removed. Possible mappings that lack corroborating question titles require review.
-2. Choice questions with no verified options in either source no longer pass as matches.
-3. Two-option unnumbered Word answer lists are recognized when an explicit selection instruction and question-type label support them.
-4. Duplicate QRE answer labels are preserved instead of deduplicated.
-5. Respondent-facing "Please use..." instructions are not globally discarded as programming notes.
-6. A reused exact QID with conflicting titles is not considered automatically equivalent.
-7. Unpaired, likely respondent-facing CF nodes appear in a collapsed candidate-review area. They are not called confirmed missing QRE questions. Internal Info nodes and empty copy are excluded.
-8. Struck-through Word runs are excluded from active wording and trigger a review note. Fully struck paragraphs are accounted for.
-9. HTML image alt text survives XML text normalization; inline hidden duplicates are excluded.
-10. Alternative numeric QIDs (such as A1) and named q-prefixed IDs are recognized without study-specific QID names.
-11. Section identification uses Word heading styles and contextual numbered headings instead of named demo sections; metadata labels such as QUALITY are not interpreted as QIDs.
-12. Exact-QID identity conflicts and uncertain normalized-ID mappings are review cases rather than unsubstantiated definitive differences.
+## QA result on the supplied demo, language ID 7
 
-## Boundaries
+- 48 QRE entries; 45 mapped; 16 source matches; 5 direct-mapping differences; 26 review verdicts; 1 unmapped.
+- **6 observed source changes**, one of which has unconfirmed question pairing.
+- **25 other reviews** with no directly observed text/answer change; many involve CF grids, dynamic content, or incomplete source information.
+- 89 unpaired respondent-text CF candidates remain separate from confirmed defects.
 
-- Text comparison uses only the user-selected XML language; runtime substitutions, routing, grid row mapping, and hidden node display cannot be exhaustively verified from a survey definition.
-- Unpaired CF candidates are **not** confirmed additional respondent questions; survey cells, reused templates, and routing can legitimately explain them.
-- The original questionnaire may contain struck-through text whose intended revision state requires manual signoff.
-- No new dependencies, external APIs, or study-specific QID overrides were added.
+Review counts must not be interpreted as numbers of defects. Exact live-survey rendering is out of scope.

@@ -45,14 +45,14 @@
  <p class="coverage-note" id="coverage-note"></p>
  <div class="stats" aria-label="Analysis summary">
   <div class="stat-quiet"><span class="stat-number" id="stat-qre">—</span><span class="stat-title">QRE questions scanned</span></div>
-  <div><span class="stat-number red" id="stat-mismatch">—</span><span class="stat-title">Possible discrepancies</span></div>
-  <div><span class="stat-number amber" id="stat-review">—</span><span class="stat-title">Needs review</span></div>
+  <div><span class="stat-number red" id="stat-mismatch">—</span><span class="stat-title">Observed source changes</span></div>
+  <div><span class="stat-number amber" id="stat-review">—</span><span class="stat-title">Other reviews</span></div>
   <div><span class="stat-number amber" id="stat-unmapped">—</span><span class="stat-title">Unmapped</span></div>
  </div>
  <div class="workarea">
   <div class="listpane">
    <div class="section-cap"><span>Findings</span><span id="visible-count"></span></div>
-   <div class="filters"><div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="Find question or text"></div><select id="status-filter" aria-label="Filter by result"><option value="mismatch" selected>Differences</option><option value="review">Needs review</option><option value="unmapped">Unmapped</option><option value="all">All findings</option></select></div>
+   <div class="filters"><div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="Find question or text"></div><select id="status-filter" aria-label="Filter by result"><option value="changes" selected>Observed changes</option><option value="review">Other reviews</option><option value="unmapped">Unmapped</option><option value="all">All findings</option></select></div>
    <div class="question-list" id="question-list" aria-label="Question comparison results"></div>
    <button id="load-more" class="load-more" hidden>Show more questions ↓</button>
   </div>
@@ -60,7 +60,7 @@
  </div>
  
  <details class="extra-section" id="additional-cf-review"><summary>Additional CF questions to review <span class="summary-desc" id="additional-cf-count">0 candidates</span></summary><div id="additional-cf-list" class="additional-cf-list"></div></details>
- <div class="result-footer">Source-text comparison only. Unverified routing, dynamic text and incomplete translations remain under “Needs review.”</div>
+ <div class="result-footer">Observed changes describe paired source content, not confirmed live-survey defects. Mapping and runtime limitations remain visible under Other reviews.</div>
 </section>
 </main>
 <footer><span>LAZYPROOF / SURVEY QA</span><span>Private by design <span class="footer-bullet">·</span> No AI <span class="footer-bullet">·</span> Static, offline-capable</span></footer>

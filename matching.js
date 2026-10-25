@@ -82,6 +82,38 @@ function classify(q,cf,reason){
  const verdict=issues.some(x=>x.level==='mismatch')?'mismatch':issues.some(x=>x.level==='review')?'review':'match';
  return {issues,answers:ans,verdict};
 }
+// Content evidence is independent from whether a proposed QID mapping is trusted.
+// A "different" result means the two source strings differ, NOT that the
+// mapping is verified or that the live respondent path was checked.
+function assessEvidence(row){
+ const q=row.q,cf=row.cf;
+ if(!cf)return {text:'unverified',answers:'unverified',mapping:'unmapped',hasChange:false,reviewGroup:'Question mapping'};
+ const types=new Set(row.issues.map(i=>i.type));
+ const qText=normalizeText(q.text),cfText=normalizeText(respondentText(cf));
+ const dynamic=hasDynamic(q.text)||hasDynamic(respondentText(cf));
+ let text='unverified';
+ if(types.has('dynamic-source'))text='variable-source-found';
+ else if(!cf.missingRequested&&qText&&!dynamic)text=qText===cfText?'same':'different';
+ const qOpts=q.options||[],cfOpts=cf.options||[];
+ const badLocale=cfOpts.some(o=>o.missingRequested&&!o.text&&!o.image);
+ const badRef=cfOpts.some(o=>o.unresolvedRef);
+ const optsDynamic=cfOpts.some(o=>hasDynamic(o.text));
+ let answers='unverified';
+ if(!qOpts.length&&!cfOpts.length && !types.has('answers-unknown'))answers='not-applicable';
+ else if(qOpts.length&&cfOpts.length&&!q.partialOptions&&!badLocale&&!badRef&&!optsDynamic&&!cf.missingRequested&&cf.type!=='Grid'&&row.reason!=='grid-parent'){
+  const d=bagDifference(qOpts,cfOpts);
+  answers=d.missing.length||d.extra.length?'different':'same';
+ }
+ const mappedConcern=['mapping','identity-conflict','duplicate-mapping','grid-row','ambiguous','missing-map','duplicate'];
+ const mapping=types.has('duplicate-mapping')||mappedConcern.some(t=>types.has(t))||row.reason==='title'||row.reason==='grid-parent'||row.reason==='manual'?'needs-confirmation':'corroborated';
+ const hasChange=text==='different'||answers==='different';
+ let reviewGroup='Source completeness';
+ if(mapping!=='corroborated')reviewGroup='Question mapping';
+ else if(types.has('grid')||types.has('grid-row'))reviewGroup='Grid structure';
+ else if(types.has('dynamic-source')||types.has('dynamic-text')||types.has('piping'))reviewGroup='Dynamic content';
+ else if(types.has('hidden'))reviewGroup='Routing / visibility';
+ return {text,answers,mapping,hasChange,reviewGroup,changeIsProvisional:hasChange&&mapping!=='corroborated'};
+}
 function compare(qre,cf,manual={}){
  const out=[], used=new Set(), ids=new Map(), canonical=new Map(), titles=new Map();
  for(const x of cf.questions){
@@ -121,9 +153,21 @@ function compare(qre,cf,manual={}){
   // identify different questions. Keep the pair inspectable but unverified.
   const qTitle=titleKey(q.title),cfTitle=titleKey(match.title);
   if(reason==='qid' && qTitle.length>=5 && cfTitle.length>=5 && qTitle!==cfTitle && !(cfTitle.length>=7&&qTitle.startsWith(cfTitle)) && cfTitle!==titleKey(match.qid)){
-   r.issues=r.issues.map(i=>i.level==='mismatch'?{...i,level:'review'}:i);
-   r.issues.push({type:'identity-conflict',level:'review',message:'QID matches, but QRE and CF titles identify different questions. Verify this mapping before accepting differences.'});
-   r.verdict='review';
+   // An exact, unique QID corroborated by distinctive identical text and
+   // several matching answer labels can overcome a stale Word section title.
+   const consistentContent=normalizeText(q.text).length>=30 &&
+    exact(q.text,respondentText(match)) && q.options.length>=3 &&
+    !q.partialOptions && !q.struckContent && !match.missingRequested &&
+    !hasDynamic(respondentText(match)) &&
+    match.options.every(o=>!o.missingRequested&&!o.unresolvedRef&&!hasDynamic(o.text)) &&
+    (()=>{const a=bagDifference(q.options,match.options);return a.referenceCount>=3 && a.referenceCount===a.actualCount && !a.missing.length && !a.extra.length;})();
+   if(consistentContent && countQ.get(q.qid.toLowerCase())===1 && (ids.get(q.qid.toLowerCase())||[]).length===1){
+    r.issues.push({type:'title-confirmed-by-content',level:'info',message:'Question titles differ, but unique exact QID, full respondent text, and every answer agree.'});
+   }else{
+    r.issues=r.issues.map(i=>i.level==='mismatch'?{...i,level:'review'}:i);
+    r.issues.push({type:'identity-conflict',level:'review',message:'QID matches, but QRE and CF titles identify different questions. Verify this mapping before accepting differences.'});
+    r.verdict='review';
+   }
   }
   const source=knownVariantSource(q,match,cf);
   const duplicateVariants=countQ.get(q.qid.toLowerCase())>1;
@@ -145,13 +189,23 @@ function compare(qre,cf,manual={}){
   if(alternatives){group.forEach((row,index)=>{row.variantNumber=index+1;row.variantTotal=group.length;});continue;}
   for(const row of group){row.issues.push({type:'duplicate-mapping',level:'review',message:'This CF node is mapped to multiple QRE questions. Confirm the correct pairing.'});if(row.verdict==='match')row.verdict='review';}
  }
+ // Keep observed content evidence even when mapping/structural limitations
+ // downgrade the overall verdict. Neither issue severity nor presentation
+ // filters may erase a measured difference between selected-language sources.
+ for(const row of out){
+  row.evidence=assessEvidence(row);
+  if(row.evidence.hasChange&&row.verdict==='match'){
+   row.verdict='review';
+   row.issues.push({type:'inconsistent-comparison',level:'review',message:'Source content differs despite a match classification. Check the comparison.'});
+  }
+ }
  const sourceExtra=cf.questions.filter(x=>!used.has(x.entityId)&&!x.hidden);
  // Keep potentially respondent-facing extra CF questions visible but never
  // call them confirmed defects: routing, cells, and QRE coverage may differ.
  const actionableExtras=sourceExtra.filter(x=>x.qid && !x.missingRequested &&
    !['Info'].includes(x.type) && respondentText(x).trim().split(/\s+/).length>=3);
- const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,extras:sourceExtra.length,actionableExtras:actionableExtras.length};
+ const summary={qre:qre.questions.length,cf:cf.questions.length,mapped:out.filter(x=>x.cf).length,matches:out.filter(x=>x.verdict==='match').length,mismatches:out.filter(x=>x.verdict==='mismatch').length,review:out.filter(x=>x.verdict==='review').length,unmapped:out.filter(x=>x.verdict==='unmapped').length,observedChanges:out.filter(x=>x.evidence.hasChange).length,changesNeedMapping:out.filter(x=>x.evidence.changeIsProvisional).length,reviewOnly:out.filter(x=>x.verdict==='review'&&!x.evidence.hasChange).length,extras:sourceExtra.length,actionableExtras:actionableExtras.length};
  return {rows:out,sourceExtra,actionableExtras,summary,created:new Date().toISOString()};
 }
-P.compare=compare;P.titleKey=titleKey;P.cleanOption=cleanOption;P.classify=classify;P.respondentText=respondentText;
+P.compare=compare;P.assessEvidence=assessEvidence;P.titleKey=titleKey;P.cleanOption=cleanOption;P.classify=classify;P.respondentText=respondentText;
 })(window.LazyProof=window.LazyProof||{});
