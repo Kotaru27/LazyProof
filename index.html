@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LazyProof — Survey text QA</title>
+<meta name="description" content="Compare a Word questionnaire and Confirmit Survey Definition XML, locally in your browser.">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head><body>
+<div class="app">
+<header class="topbar">
+  <a class="brand" href="./index.html" aria-label="LazyProof home"><span class="brand-mark" aria-hidden="true"><span></span><span></span></span><strong>lazyproof<span class="brand-dot">.</span></strong></a>
+  <div class="top-right"><span class="top-product">SURVEY TEXT QA</span><span class="top-sep"></span><span class="private-note"><span class="small-circle"></span>Files stay in this browser</span></div>
+</header>
+<main>
+<section class="setup" id="setup">
+ <div class="eyebrow"><span class="eyebrow-line"></span>QUESTIONNAIRE VERIFICATION</div>
+ <h1>Make every word<br><em>accountable.</em></h1>
+ <p class="intro">Compare a Word questionnaire with a Confirmit survey definition. See exact differences, questionable mappings, and what still needs human review.</p>
+ <div class="upload-grid">
+  <label class="dropzone" id="qre-drop" tabindex="0">
+   <input id="qre-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+   <span class="upload-symbol"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3h6l5 5v13H5V3h3zM14 3v6h5M8 14h8M8 18h5"/></svg></span>
+   <span class="upload-overline">01 / SOURCE OF TRUTH</span><strong>Word Questionnaire</strong><span class="file-hint" id="qre-status">Drop your .docx or click to browse</span>
+   <span class="upload-foot"><span>QRE document</span><span id="qre-size">DOCX</span></span>
+  </label>
+  <label class="dropzone" id="xml-drop" tabindex="0">
+   <input id="xml-file" type="file" accept=".xml,.zip,application/zip,text/xml" hidden>
+   <span class="upload-symbol"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3h8l4 4v13H4V3h4zM16 3v5h4M10 11l-3 3 3 3m4-6 3 3-3 3"/></svg></span>
+   <span class="upload-overline">02 / PROGRAMMED VERSION</span><strong>Confirmit Definition</strong><span class="file-hint" id="xml-status">Drop your .xml / .zip or click to browse</span>
+   <span class="upload-foot"><span>Survey XML export</span><span id="xml-size">XML / ZIP</span></span>
+  </label>
+ </div>
+ <div class="setup-actions">
+  <label class="field-label" for="language">XML language <select id="language" aria-label="XML language"><option value="9">German · 9</option><option value="7">Default · 7</option><option value="12">English · 12</option><option value="1043">Dutch · 1043</option><option value="1025">Arabic · 1025</option></select></label>
+  <button class="primary-btn" id="analyze" disabled>Analyze study <span aria-hidden="true">↗</span></button>
+ </div>
+ <div id="error" class="error-box" role="alert" hidden></div>
+ <div class="set-foot"><span>Local processing · No upload to a server</span><span>Question text · Answer options · Mapping evidence</span></div>
+</section>
+<section id="results" class="results" hidden>
+ <div class="results-top"><div><div class="eyebrow"><span class="eyebrow-line"></span>COMPARISON REPORT</div><h2>Study analysis<span class="soft-period">.</span></h2><p id="project-name" class="results-subtitle"></p></div><div class="result-actions"><button class="outline-btn" id="change-files">Change files</button><button class="outline-btn" id="export-csv">Export CSV <span aria-hidden="true">↗</span></button></div></div>
+ <div class="coverage-note" id="coverage-note"></div>
+ <div class="stats" aria-label="Analysis summary">
+  <div><span class="stat-number" id="stat-qre">—</span><span class="stat-title">QRE questions found</span></div>
+  <div><span class="stat-number" id="stat-matches">—</span><span class="stat-title">Source matches</span></div>
+  <div><span class="stat-number red" id="stat-mismatch">—</span><span class="stat-title">Possible discrepancies</span></div>
+  <div><span class="stat-number amber" id="stat-review">—</span><span class="stat-title">Review / unmapped</span></div>
+ </div>
+ <div class="workarea">
+  <div class="listpane">
+   <div class="section-cap"><span>QUESTION-BY-QUESTION</span><span id="visible-count"></span></div>
+   <div class="filters"><div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="Search QID, title, text"></div><select id="status-filter" aria-label="Filter by result"><option value="all">All statuses</option><option value="mismatch">Discrepancies</option><option value="review">Needs review</option><option value="unmapped">Unmapped</option><option value="match">Source matches</option></select></div>
+   <div class="question-list" id="question-list" aria-label="Question comparison results"></div>
+   <button id="load-more" class="load-more" hidden>Show more questions ↓</button>
+  </div>
+  <div class="detailpane"><div id="detail" class="detail-empty"><div class="empty-glyph">↗</div><h3>Inspect a question</h3><p>Choose an item on the left to see the QRE, the programmed XML, and the evidence behind its status.</p></div></div>
+ </div>
+ <details class="extra-section"><summary><span>Unpaired CF source nodes <strong id="extra-count"></strong></span><span class="summary-desc">Templates, unused and cell-specific nodes may appear here</span></summary><div id="extras"></div></details>
+ <div class="result-footer">Source comparison only. This report cannot prove respondent rendering, scripting logic, routing correctness, or visual formatting.</div>
+</section>
+</main>
+<footer><span>LAZYPROOF / SURVEY QA</span><span>Private by design <span class="footer-bullet">·</span> No AI <span class="footer-bullet">·</span> Static, offline-capable</span></footer>
+</div>
+<script src="lib/jszip.min.js"></script><script src="parsers.js"></script><script src="matching.js"></script><script src="app.js"></script>
+</body></html>
