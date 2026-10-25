@@ -21,10 +21,13 @@ function classify(q,cf,reason){
  const qt=normalizeText(qText), ct=normalizeText(cfText);
  const validText=qt && (qt===ct || (ct.startsWith(qt)&& /[.!?\n]/.test(qt.slice(-2))));
  if(!qt)issues.push({type:'unparsed-text',level:'review',message:'QRE question wording was not extracted.'});
- else if(!ct)issues.push({type:'empty-text',level:cf.fallbackText?'review':'mismatch',message:cf.fallbackText?'Programmed text is empty in selected language; another language has text. Display fallback requires review.':'Programmed question text is empty in selected language.'});
+ else if(!ct)issues.push({type:'empty-text',level:cf.missingRequested?'review':'mismatch',message:cf.missingRequested?'This question has no entry for the selected XML language; no other language was used.':'Programmed question text is empty in the selected language.'});
  else if(!validText)issues.push({type:'text',level:'mismatch',message:'Question wording differs.'});
+ // Do not declare an option missing merely because its selected-language label is absent.
+ const unlocalizedAnswers=cf.options.filter(o=>o.missingRequested&&!o.text&&!o.image).length;
  const ans=bagDifference(q.options||[],cf.options||[]);
- if(ans.referenceCount>0){
+ if(unlocalizedAnswers)issues.push({type:'answer-locale',level:'review',message:`${unlocalizedAnswers} answer label(s) have no selected-language entry. Answer comparison is incomplete; other languages were not consulted.`});
+ if(ans.referenceCount>0&&!unlocalizedAnswers&&!cf.missingRequested){
   if(!ans.actualCount)issues.push({type:'answers',level:'review',message:`QRE contains ${ans.referenceCount} candidate answers, but no comparable CF answers were extracted.`});
   else if(ans.missing.length||(ans.extra.length&&!q.partialOptions)){
    // Grid and loop answers may be flattened differently: classify for review to avoid a false definitive mismatch.
@@ -33,8 +36,7 @@ function classify(q,cf,reason){
   }
  }
  if(q.partialOptions)issues.push({type:'abbreviated-list',level:'review',message:'QRE answer list uses an ellipsis; extra XML answers cannot be reliably classified.'});
- if(cf.fallbackInstruction)issues.push({type:'locale',level:'review',message:'Selected language has no instruction; another language contains one. Actual display fallback is unverified.'});
- if(cf.missingRequested)issues.push({type:'locale',level:'review',message:'Selected language missing; XML data was taken from another language.'});
+ if(cf.missingRequested&&!issues.some(i=>i.type==='empty-text'))issues.push({type:'locale',level:'review',message:'Selected language has no question entry in XML. No other language was used.'});
  if(cf.hidden)issues.push({type:'hidden',level:'review',message:'This XML node is hidden or excluded from layout; respondent visibility is not verified.'});
  if(cf.options.some(o=>o.unresolvedRef))issues.push({type:'references',level:'review',message:'An answer list reference could not be resolved.'});
  if(cf.type==='Grid')issues.push({type:'grid',level:'review',message:'Grid rows/scales may not correspond one-to-one with QRE answer lines; inspect manually.'});

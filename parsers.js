@@ -130,36 +130,30 @@ async function parseQRE(file){
  const numSDT=d.getElementsByTagNameNS(WORD,'sdt').length;
  return {...result,blocks:blocks.length,contentControls:numSDT,documentName:file.name};
 }
-function getLangText(parent,language,fallBack){
- const directLanguage=children(parent,'Text').find(x=>x.getAttribute('Language')===language);
- const fallback=children(parent,'Text').find(x=>x.getAttribute('Language')===fallBack);
- const preferred=directLanguage||fallback||children(parent,'Text')[0];
- return {text:stripMarkup(txt(preferred)),usedLanguage:preferred?.getAttribute('Language')||'',missingRequested:!directLanguage};
+// Strict locale isolation: never read text, titles or labels from another language.
+// A missing translation is an unresolved coverage gap, NOT a wording mismatch.
+function getLangText(parent,language){
+ const own=children(parent,'Text').find(x=>x.getAttribute('Language')===language);
+ return {text:own?stripMarkup(txt(own)):'',usedLanguage:own?language:'',missingRequested:!own};
 }
-function getFormTexts(node,language,fallback){
- const forms=children(direct(node,'FormTexts'),'FormText');
- const own=forms.find(e=>e.getAttribute('Language')===language);
- const other=forms.find(e=>e.getAttribute('Language')===fallback);
- const choice=own||other||forms[0];
- function val(name){return stripMarkup(txt(direct(choice,name)));}
- const preferredText=val('Text');const preferredInstruction=val('Instruction');
- const fallbackInstr=other?stripMarkup(txt(direct(other,'Instruction'))):'';
- const fallbackText=other?stripMarkup(txt(direct(other,'Text'))):'';
- return {title:val('Title'),text:preferredText,instruction:preferredInstruction,missingRequested:!own,language:choice?.getAttribute('Language')||'',fallbackInstruction:(!preferredInstruction&&fallbackInstr&&other!==choice)?fallbackInstr:'',fallbackText:(!preferredText&&fallbackText&&other!==choice)?fallbackText:''};
+function getFormTexts(node,language){
+ const own=children(direct(node,'FormTexts'),'FormText').find(e=>e.getAttribute('Language')===language);
+ function val(name){return own?stripMarkup(txt(direct(own,name))):'';}
+ return {title:val('Title'),text:val('Text'),instruction:val('Instruction'),missingRequested:!own,language:own?language:''};
 }
-function getAnswer(node,language,fallback){
- const z=getLangText(direct(node,'Texts'),language,fallback);
- // Some predefined image lists use media filename instead of displayed text.
+function getAnswer(node,language){
+ const z=getLangText(direct(node,'Texts'),language);
+ // Image metadata is language-neutral; it is not used to borrow text from other locales.
  const media=children(node,'AnswerImageDefault').map(x=>txt(x)).filter(Boolean).join(' ');
  return {code:node.getAttribute('Precode')||'',text:z.text,language:z.usedLanguage,missingRequested:z.missingRequested,image:media||node.getAttribute('DefaultImageUrl')||''};
 }
-function collectAnswers(root,language,fallback,listMap,depth=0){
+function collectAnswers(root,language,listMap,depth=0){
  const out=[];if(!root||depth>3)return out;
  for(const el of Array.from(root.children)){
-  if(el.localName==='Answer'||el.localName==='GridAnswer'||el.localName==='Scale')out.push(getAnswer(el,language,fallback));
+  if(el.localName==='Answer'||el.localName==='GridAnswer'||el.localName==='Scale')out.push(getAnswer(el,language));
   if(el.localName==='Predefined'){
    const ref=el.getAttribute('ListSource')||el.getAttribute('ReferencedEntityId');
-   if(listMap.has(ref)) out.push(...collectAnswers(listMap.get(ref),language,fallback,listMap,depth+1));
+   if(listMap.has(ref)) out.push(...collectAnswers(listMap.get(ref),language,listMap,depth+1));
    else out.push({code:'',text:'',unresolvedRef:ref});
   }
  }
@@ -171,7 +165,7 @@ function parseCF(document,requestedLang='9'){
  const proj=direct(root,'ProjectInfo');const questionnaire=direct(root,'Questionnaire');
  const routing=direct(direct(questionnaire,'Routing'),'Nodes');
  if(!routing)throw Error('Could not find Questionnaire > Routing > Nodes. Check the export type.');
- const fallback=proj?.getAttribute('DefaultLanguage')||'7';
+ const defaultLanguage=proj?.getAttribute('DefaultLanguage')||'7';
  const predefined=direct(direct(questionnaire,'PredefinedLists'),'Nodes');const listMap=new Map();
  if(predefined)for(const node of Array.from(predefined.children)){if(node.localName==='PredefinedList'){
  const id=node.getAttribute('EntityId');
@@ -182,12 +176,12 @@ function parseCF(document,requestedLang='9'){
   for(const ch of Array.from(node.children)){
    if(CHILD_TYPES.has(ch.localName)){
     const name=txt(direct(ch,'Name'));
-    const field=getFormTexts(ch,requestedLang,fallback);
+    const field=getFormTexts(ch,requestedLang);
     const category=ch.getAttribute('QuestionCategory')||'';
     const hidden=['Hidden','Background','Panel'].includes(ch.getAttribute('VariableType'))||category.toLowerCase().includes('exclude');
     const answerRoots=Array.from(ch.children).filter(e=>['SingleAnswers','MultiAnswers','OpenAnswers','GridAnswers','Scales','Answers'].includes(e.localName));
-    const options=answerRoots.flatMap(e=>collectAnswers(e,requestedLang,fallback,listMap));
-    const p={qid:name,entityId:ch.getAttribute('EntityId')||'',type:ch.localName,title:field.title,text:field.text,instruction:field.instruction,options,language:field.language,missingRequested:field.missingRequested,fallbackInstruction:field.fallbackInstruction,fallbackText:field.fallbackText,hidden,path:blockPath.join(' / '),source:'cf'};
+    const options=answerRoots.flatMap(e=>collectAnswers(e,requestedLang,listMap));
+    const p={qid:name,entityId:ch.getAttribute('EntityId')||'',type:ch.localName,title:field.title,text:field.text,instruction:field.instruction,options,language:field.language,missingRequested:field.missingRequested,hidden,path:blockPath.join(' / '),source:'cf'};
     if(!name && !field.text && !field.title)continue;
     questions.push(p);types[ch.localName]=(types[ch.localName]||0)+1;
     if(name){const arr=duplicates.get(name)||[];arr.push(questions.length-1);duplicates.set(name,arr);}
@@ -199,7 +193,7 @@ function parseCF(document,requestedLang='9'){
   }
  }
  visit(routing);
- return {questions,project:proj?.getAttribute('Name')||'',projectId:proj?.getAttribute('ProjectId')||'',defaultLanguage:fallback,selectedLanguage:requestedLang,types,unresolvedRefs:unresolved,duplicates:[...duplicates.entries()].filter(([k,v])=>v.length>1).map(([k,v])=>k),totalLists:listMap.size};
+ return {questions,project:proj?.getAttribute('Name')||'',projectId:proj?.getAttribute('ProjectId')||'',defaultLanguage,selectedLanguage:requestedLang,types,unresolvedRefs:unresolved,duplicates:[...duplicates.entries()].filter(([k,v])=>v.length>1).map(([k,v])=>k),totalLists:listMap.size};
 }
 async function parseSurvey(file,language='9'){
  let xml;

@@ -1,59 +1,22 @@
-# LazyProof Survey QA — Verification record
+# LazyProof v0.3 — verification evidence
 
-Date: 2026-10-25. Version: 0.2 (working technical preview, not release-certified).
+## Changes
+- Use only the selected XML language ID for question Title/Text/Instruction and answer text. No language fallback in the comparison parser. Missing requested-language entries stay unresolved/review, not confirmed wording mismatches.
+- Display complete QRE and CF question texts for wording differences. Unchanged words appear green, changed words red. Literal ellipses present in the input XML remain literal content; LazyProof does not insert ellipses to truncate excerpts.
+- Use a compact results workspace; unmatched and review findings remain visible, matched rows remain hidden. Technical notes and manual mapping are collapsed until opened.
+- Export complete QRE and CF texts for wording discrepancies in CSV; otherwise no full question in a review-only row. Include XML language in CSV.
 
-## What was executed
+## Verified locally in browser
+Cloud-hosted headless Chromium via Playwright and the real demo QRE + ZIP:
+- QRE 48 recognized, XML 317 nodes, 43 mapped; 8 match, 14 mismatch, 26 review. 40 reported findings, all nonmatching. These counts are source-heuristic estimates, not validated survey defects.
+- QRE `cq1200_x` and CF `cq1200`: full text on both sides, distinct red changed words and green identical words. CF contains an actual typographic ellipsis character in the exported question definition; it is retained as data.
+- All returned question and option `language` fields are either the selected language ID or empty; no cross-language results.
+- Synthetic three-language XML probe: when `9` missing, no fallback from `7` or `12`, and result classified `review`; selecting `12` or `7` returns precisely those strings.
+- Switching to XML language `12` works, 158 of the XML question nodes have no selected-language FormText; these are kept as missing/review, never filled using another language.
+- Full-text comparison with 500+ tokens preserved both sides, with bounded complexity path.
+- CSV exported 40 findings, all nonmatching, selected language 9, full wording for changed texts.
+- No runtime page errors or network requests in this browser test.
 
-**Actual uploaded demo inputs** (not redistributed):
+Not verified: live respondent rendering, true runtime language fallback (intentionally not assumed), exhaustive grid/routing comparisons, respondent-level outputs, or real-user acceptance.
 
-- Word QRE `.docx`, parsed by the browser OOXML reader.
-- Confirmit survey-definition `.zip` (one XML file), parsed by the Confirmit routing/tree reader.
-- Chromium 144 via Playwright, with the application HTML, CSS and scripts injected into an isolated page because direct navigation was blocked by the test environment's browser policy.
-
-Observed:
-- 1,004 Word content blocks extracted; 57 Word structured content controls detected.
-- 48 recognizable QRE question IDs; 317 XML question/info nodes.
-- 43 QRE items had unique XML node associations; 8 were classified as source matches, 16 as potential differences, 24 requiring review; 176 non-hidden XML nodes not used in mappings.
-- Both the known `cq1200_x` ↔ `cq1200` ID variation and the wording difference were detected.
-- The `oqBF2_x` ↔ `cqBF2` variation was identified, including shared answer-list lookup.
-- XML grid parent vs QRE row comparisons were flagged for review instead of misleading question-text differences.
-- Status filtering and CSV export executed; CSV was generated (nonempty, 27 KB in the final observed run).
-- JavaScript runtime errors during this comparison: 0.
-
-**Synthetic test suite** (no client data):
-- 11 assertions passed covering DOCX extraction, content controls, alternate QIDs, shared predefined lists, an exact comparison, a wording discrepancy, additional nodes, malformed XML rejection and inert HTML parsing.
-- JavaScript runtime errors: 0; observed external network requests: 0.
-
-**Syntax checks**: `parsers.js`, `matching.js`, `app.js` checked by Node.js v22; no syntax errors.
-
-## Limits and unverified release gates
-
-- Direct navigation to either `file://` or the local HTTP site was blocked by environment Chrome administration policy. We **did not** verify the packaged ZIP by opening `index.html` directly in a normal, unmanaged browser.
-- The program handles a subset of QRE structures. QIDs are detected conservatively; unnumbered question introductions and malformed/unsupported blocks are not yet reliably assigned. The 48 recognized items are **not** a claim of complete QRE coverage.
-- The 16 possible differences are algorithmic findings, not manually certified programming defects.
-- Grid rows, piping expressions, display logic, scripts, quotas, image content, response routing and rendered text/formatting are not comprehensively verified.
-- Formatting extraction exists at the QRE paragraph level but full Word-vs-XML formatting comparison is **not implemented**.
-- CSV export succeeds in browser execution; independent Excel compatibility/visual review is not yet verified.
-- No production deployment or employer-managed browser integration has been verified.
-
-## Release recommendation
-
-Suitable as an early, review-assisted text QA tool on supported sources. **Not** suitable as an automatic survey sign-off or substitute for programming QA. Manually review discrepancies, unresolved mappings and all unsupported/unchecked questionnaire content.
-
-## v0.2 difference-only update — verified 2026-10-25
-
-Input: the same privately uploaded demo QRE and Confirmit XML, plus the user's exported v0.1 CSV (48 rows: 8 match, 16 mismatch, 24 review). Source study files are not published.
-
-Executed in Chromium with Playwright in an isolated injected-page harness (because ordinary site navigation was restricted):
-
-- QRE/XML parser returned unchanged 48 question associations: 8 `match`, 16 `mismatch`, 24 `review`, 0 `unmapped`.
-- Report list displayed **40 findings** (matches hidden); match filter and match summary removed.
-- Searching the QID of a matched question did not display a matched row.
-- Word-level excerpts displayed matched nearby tokens in green and changed tokens in red for a genuine German-language wording difference (`cq1400_x`).
-- Full question and full answer-list panes were removed; only changed question excerpts and unresolved answer-option differences are shown.
-- CSV contained **40 rows**, 11 columns and no full-question/full-answer-list columns, no `match` rows. Export was 11,999 bytes.
-- Bounded long-input excerpt case, added-word case, unchanged case and HTML-like content case executed.
-- Observed JavaScript errors: **0**; external network requests in the test: **0**.
-- Tested via browser DOM injection, **not** a published GitHub Pages workflow or direct URL load. No claim of production browser acceptance.
-
-The text-extraction and comparison heuristics are unchanged. Identified discrepancies are potential source differences only, not independently verified programming bugs. Large/reordered blocks, unnumbered text, grids and routing still require human review.
+Test script (requires Playwright in QA environment): `tests-v03.py` with the demo files in the specified test location. No client-side installation required to use the application.

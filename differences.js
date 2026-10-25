@@ -45,5 +45,12 @@ function diffSnippets(qre,xml,context=3){
 }
 function plainSide(parts){return parts.map(t=>t.text).join(' ');}
 function plainExcerpt(h,side){return (h.leading?'… ':'')+(plainSide(h[side])||'[absent]')+(h.trailing?' …':'');}
+// Full aligned text on both sides: preserve every word instead of contextual snippets.
+function fullComparison(qre,xml){
+ const ops=wordOperations(qre,xml);
+ const side=name=>ops.filter(x=>x.kind==='same'||x.kind===name).map(x=>({text:x.text,changed:x.kind!=='same'}));
+ return {qre:side('qre'),xml:side('xml')};
+}
+P.fullComparison=fullComparison;
 P.diffSnippets=diffSnippets;P.plainExcerpt=plainExcerpt;P.wordOperations=wordOperations;
 })(window.LazyProof=window.LazyProof||{});

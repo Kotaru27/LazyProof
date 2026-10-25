@@ -15,7 +15,7 @@
 <section class="setup" id="setup">
  <div class="eyebrow"><span class="eyebrow-line"></span>QUESTIONNAIRE VERIFICATION</div>
  <h1>Make every word<br><em>accountable.</em></h1>
- <p class="intro">Compare a Word questionnaire with a Confirmit survey definition. See only changed words, altered answers, and the questions that need review.</p>
+ <p class="intro">Compare a Word questionnaire with a Confirmit survey definition. See changed words, altered answers, and questions that need review, with complete text side by side.</p>
  <div class="upload-grid">
   <label class="dropzone" id="qre-drop" tabindex="0">
    <input id="qre-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
@@ -31,29 +31,30 @@
   </label>
  </div>
  <div class="setup-actions">
-  <label class="field-label" for="language">XML language <select id="language" aria-label="XML language"><option value="9">German · 9</option><option value="7">Default · 7</option><option value="12">English · 12</option><option value="1043">Dutch · 1043</option><option value="1025">Arabic · 1025</option></select></label>
+  <label class="field-label" for="language">Compare language <select id="language" aria-label="XML language"><option value="9">German · 9</option><option value="7">Default · 7</option><option value="12">English · 12</option><option value="1043">Dutch · 1043</option><option value="1025">Arabic · 1025</option></select></label>
+  <span class="language-hint">Compare against a QRE written in the same language. Missing XML translations are flagged for review.</span>
   <button class="primary-btn" id="analyze" disabled>Analyze study <span aria-hidden="true">↗</span></button>
  </div>
  <div id="error" class="error-box" role="alert" hidden></div>
  <div class="set-foot"><span>Local processing · No upload to a server</span><span>Question text · Answer options · Mapping evidence</span></div>
 </section>
 <section id="results" class="results" hidden>
- <div class="results-top"><div><div class="eyebrow"><span class="eyebrow-line"></span>COMPARISON REPORT</div><h2>Study analysis<span class="soft-period">.</span></h2><p id="project-name" class="results-subtitle"></p></div><div class="result-actions"><button class="outline-btn" id="change-files">Change files</button><button class="outline-btn" id="export-csv">Export CSV <span aria-hidden="true">↗</span></button></div></div>
+ <div class="results-top"><div><div class="eyebrow"><span class="eyebrow-line"></span>COMPARISON REPORT</div><h2>Review differences<span class="soft-period">.</span></h2><p id="project-name" class="results-subtitle"></p></div><div class="result-actions"><button class="outline-btn" id="change-files">Change files</button><button class="outline-btn" id="export-csv">Export CSV <span aria-hidden="true">↗</span></button></div></div>
  <div class="coverage-note" id="coverage-note"></div>
  <div class="stats" aria-label="Analysis summary">
-  <div><span class="stat-number" id="stat-qre">—</span><span class="stat-title">QRE questions found</span></div>
+  <div class="stat-quiet"><span class="stat-number" id="stat-qre">—</span><span class="stat-title">QRE questions scanned</span></div>
   <div><span class="stat-number red" id="stat-mismatch">—</span><span class="stat-title">Possible discrepancies</span></div>
   <div><span class="stat-number amber" id="stat-review">—</span><span class="stat-title">Needs review</span></div>
   <div><span class="stat-number amber" id="stat-unmapped">—</span><span class="stat-title">Unmapped</span></div>
  </div>
  <div class="workarea">
   <div class="listpane">
-   <div class="section-cap"><span>DIFFERENCES & UNRESOLVED</span><span id="visible-count"></span></div>
+   <div class="section-cap"><span>Findings</span><span id="visible-count"></span></div>
    <div class="filters"><div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="Search QID, title, text"></div><select id="status-filter" aria-label="Filter by result"><option value="all">All findings</option><option value="mismatch">Discrepancies</option><option value="review">Needs review</option><option value="unmapped">Unmapped</option></select></div>
    <div class="question-list" id="question-list" aria-label="Question comparison results"></div>
    <button id="load-more" class="load-more" hidden>Show more questions ↓</button>
   </div>
-  <div class="detailpane"><div id="detail" class="detail-empty"><div class="empty-glyph">↗</div><h3>Inspect a question</h3><p>Choose an item on the left to see the QRE, the programmed XML, and the evidence behind its status.</p></div></div>
+  <div class="detailpane"><div id="detail" class="detail-empty"><div class="empty-glyph">↗</div><h3>Inspect a question</h3><p>Select a finding to compare the complete QRE and CF wording.</p></div></div>
  </div>
  
  <div class="result-footer">Source comparison only. This report cannot prove respondent rendering, scripting logic, routing correctness, or visual formatting.</div>
