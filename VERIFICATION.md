@@ -1,6 +1,6 @@
 # LazyProof Survey QA — Verification record
 
-Date: 2026-10-25. Version: 0.1 (working technical preview, not release-certified).
+Date: 2026-10-25. Version: 0.2 (working technical preview, not release-certified).
 
 ## What was executed
 
@@ -39,3 +39,21 @@ Observed:
 ## Release recommendation
 
 Suitable as an early, review-assisted text QA tool on supported sources. **Not** suitable as an automatic survey sign-off or substitute for programming QA. Manually review discrepancies, unresolved mappings and all unsupported/unchecked questionnaire content.
+
+## v0.2 difference-only update — verified 2026-10-25
+
+Input: the same privately uploaded demo QRE and Confirmit XML, plus the user's exported v0.1 CSV (48 rows: 8 match, 16 mismatch, 24 review). Source study files are not published.
+
+Executed in Chromium with Playwright in an isolated injected-page harness (because ordinary site navigation was restricted):
+
+- QRE/XML parser returned unchanged 48 question associations: 8 `match`, 16 `mismatch`, 24 `review`, 0 `unmapped`.
+- Report list displayed **40 findings** (matches hidden); match filter and match summary removed.
+- Searching the QID of a matched question did not display a matched row.
+- Word-level excerpts displayed matched nearby tokens in green and changed tokens in red for a genuine German-language wording difference (`cq1400_x`).
+- Full question and full answer-list panes were removed; only changed question excerpts and unresolved answer-option differences are shown.
+- CSV contained **40 rows**, 11 columns and no full-question/full-answer-list columns, no `match` rows. Export was 11,999 bytes.
+- Bounded long-input excerpt case, added-word case, unchanged case and HTML-like content case executed.
+- Observed JavaScript errors: **0**; external network requests in the test: **0**.
+- Tested via browser DOM injection, **not** a published GitHub Pages workflow or direct URL load. No claim of production browser acceptance.
+
+The text-extraction and comparison heuristics are unchanged. Identified discrepancies are potential source differences only, not independently verified programming bugs. Large/reordered blocks, unnumbered text, grids and routing still require human review.

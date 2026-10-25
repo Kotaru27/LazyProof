@@ -1,4 +1,4 @@
-# LazyProof — Survey Text QA (v0.1, functional prototype)
+# LazyProof — Survey Text QA (v0.2, difference-only prototype)
 
 A static, browser-local comparison tool for Word `.docx` questionnaires and **Confirmit Survey Definition** `.xml` or `.zip` files. This is a new tool, not an alteration of Lazy Finder.
 
@@ -9,7 +9,7 @@ Extract this ZIP and open `index.html` in Chrome or Edge. No installation, admin
 1. Select the QRE `.docx`.
 2. Select the survey-definition `.xml` or a ZIP containing one XML.
 3. Choose XML language (German 9 by default) and click **Analyze study**.
-4. Inspect every *Difference*, *Needs review*, or *Unmapped* item. Review additional programmed nodes separately.
+4. Inspect only *Difference*, *Needs review*, or *Unmapped* findings; successfully matched items are omitted from the display.
 5. Optionally change uncertain mappings using the selector. **Export CSV** for Excel or record-keeping.
 
 ## What it can do
@@ -18,7 +18,8 @@ Extract this ZIP and open `index.html` in Chrome or Edge. No installation, admin
 - Confirmit routing-tree node extraction: QIDs, language-specific titles, texts, instructions, grids, single/multi answers and shared predefined answer lists.
 - Conservative QID, canonical-QID, grid-parent and exact unique-title identification. Ambiguous questions remain unresolved.
 - Text and answer-list comparison, discrepancy reporting and explicit manual review for unsupported scenarios.
-- CSV export with the QRE and XML wording, mapping method and findings.
+- Difference-only report: word-level changed excerpts with nearby matching context in green and changed tokens in red. No entire question/answer lists are displayed.
+- Difference-only CSV: 11 columns including concise QRE/CF changed excerpts, missing/extra answer text and unresolved findings; fully matched questions excluded.
 
 ## Known limits — read before relying on results
 
@@ -38,4 +39,4 @@ This package is static and includes a local copy of JSZip (MIT), located at `lib
 
 ## Evidence
 
-The shipped test fixture contains **no confidential study data**. Automated tests are in `tests/` and separate browser verification results are in `VERIFICATION.md`. Do not mistake a successful parser run for verified survey equivalence.
+No confidential study data is distributed. Browser test evidence is recorded in `VERIFICATION.md`. Do not mistake a successful parser run for verified survey equivalence.
