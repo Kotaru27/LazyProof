@@ -88,7 +88,7 @@ function isQuestionTitle(s){
 }
 function isRespondentLead(s){
  const t=norm(s);
- if(!t||/^(?:Answers|SHOW|Do not show|INFO BOX|Aldi Regions|South|North|East|West|Cell\s*\d+|Rows?\s+[xy]|\[[^\]]+\])$/i.test(t))return false;
+ if(!t||/^(?:Answers|SHOW|Do not show|INFO BOX|South|North|East|West|Cell\s*\d+|Rows?\s+[xy]|\[[^\]]+\])$/i.test(t))return false;
  if(/^(?:NOTE|ROUTING|ONLY|IF|QUALITY|CLOSE|SHOW|Soft quota|Hard quota|Please programme|Please show|[A-Z]{2,}\s*:)/i.test(t))return false;
  return /^(?:\(?Bitte\b|Kreuzen\b|Wählen\b|Markieren\b|Tragen\b|Die meisten\b|Falls\b|Es sind\b|Please\b|Select\b|Tick\b|Welche\b|Was\b|Wie\b|Warum\b|Wo\b|Sind\b|Sie\s+(?:können|dürfen)\b)/i.test(t);
 }
@@ -133,7 +133,7 @@ function splitQre(blocks){
  for(let i=0;i<blocks.length;i++){
   const b=blocks[i],s=b.text;
   // Region quota tables are project-level programming data, not answer options.
-  if(current && /^Please use region quota\b/i.test(s)){finish();continue;}
+  if(current && /^Please\s+(?:use|apply|update|set)\b.*\bquotas?\b/i.test(s)){finish();continue;}
   if(isQuestionTitle(s) && !QID_RE.test(s)){
    // New headings delimit QRE question even when the following question lacks a coded ID.
    if(current)finish();title=s;continue;
